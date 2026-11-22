@@ -266,67 +266,182 @@
     }
     return out;
   }
-  function overpass(q) {
-    var i = 0;
-    function next(lastErr) {
-      if (i >= OVERPASS.length) return Promise.reject(lastErr || new Error('overpass'));
-      var url = OVERPASS[i++];
-      return fetchJson(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, 28000)
-        .catch(function (e) { return next(e); });
+  var gen = 0, inflight = 0, diag = [], reqN = 0, srvBad = [0, 0];
+  var DATA_R = 430, CACHE_TTL = 14 * 24 * 3600 * 1000, CACHE_V = 1;
+  var KEEP = ['building', 'height', 'building:levels', 'highway', 'maxspeed', 'area', 'enforcement'];
+
+  /* Cache sul dispositivo (IndexedDB): la seconda volta nella stessa zona la mappa è subito pronta */
+  var idbP = null;
+  function openIdb() {
+    if (!idbP) idbP = new Promise(function (resolve) {
+      try {
+        var rq = indexedDB.open('nightrider-cache', 1);
+        rq.onupgradeneeded = function () { rq.result.createObjectStore('cells'); };
+        rq.onsuccess = function () { resolve(rq.result); };
+        rq.onerror = function () { resolve(null); };
+        rq.onblocked = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+    return idbP;
+  }
+  function cacheGet(key) {
+    return openIdb().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var rq = db.transaction('cells', 'readonly').objectStore('cells').get(key);
+          rq.onsuccess = function () { var v = rq.result; resolve(v && v.v === CACHE_V && Date.now() - v.t < CACHE_TTL ? v : null); };
+          rq.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    });
+  }
+  function cachePut(key, els) {
+    openIdb().then(function (db) {
+      if (!db) return;
+      try { db.transaction('cells', 'readwrite').objectStore('cells').put({ v: CACHE_V, t: Date.now(), els: els }, key); } catch (e) {}
+    });
+  }
+  function compactEls(els) {
+    var out = [];
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i], t = {}, tg = e.tags || {}, k, j;
+      for (k = 0; k < KEEP.length; k++) if (tg[KEEP[k]] !== undefined) t[KEEP[k]] = tg[KEEP[k]];
+      if (e.type === 'node') { out.push({ type: 'node', id: e.id, lat: e.lat, lon: e.lon, tags: t }); continue; }
+      if (e.type !== 'way' || !e.geometry) continue;
+      var flat = new Array(e.geometry.length * 2);
+      for (j = 0; j < e.geometry.length; j++) { flat[2 * j] = e.geometry[j].lat; flat[2 * j + 1] = e.geometry[j].lon; }
+      out.push({ type: 'way', id: e.id, tags: t, flat: flat });
     }
-    return next();
+    return out;
+  }
+  function expandEls(c) {
+    var out = [];
+    for (var i = 0; i < c.length; i++) {
+      var e = c[i];
+      if (e.type === 'node') { out.push(e); continue; }
+      var g = new Array(e.flat.length / 2);
+      for (var j = 0; j < g.length; j++) g[j] = { lat: e.flat[2 * j], lon: e.flat[2 * j + 1] };
+      out.push({ type: 'way', id: e.id, tags: e.tags, geometry: g });
+    }
+    return out;
+  }
+
+  /* Richieste a Overpass: due in parallelo, su server diversi. Se uno è lento o fallisce si passa all'altro. */
+  function hostOf(u) { return u.replace(/^https?:\/\//, '').split('/')[0]; }
+  function logReq(si, kind, ms, res) {
+    diag.unshift({ host: hostOf(OVERPASS[si]), kind: kind, ms: ms, res: res });
+    if (diag.length > 14) diag.length = 14;
+  }
+  function overpass(q, kind) {
+    var order = [reqN % OVERPASS.length, (reqN + 1) % OVERPASS.length];
+    reqN++;
+    if (srvBad[order[0]] > Date.now() && srvBad[order[1]] <= Date.now()) order.reverse();
+    function attempt(k, lastErr) {
+      if (k >= order.length) return Promise.reject(lastErr || new Error('overpass'));
+      var si = order[k], t0 = Date.now();
+      return fetchJson(OVERPASS[si], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, k === 0 ? 16000 : 26000).then(function (j) {
+        logReq(si, kind, Date.now() - t0, 'ok');
+        return j;
+      }, function (e) {
+        srvBad[si] = Date.now() + 45000;
+        logReq(si, kind, Date.now() - t0, e && e.status ? 'errore ' + e.status : (e && e.message) || 'errore');
+        return attempt(k + 1, e);
+      });
+    }
+    return attempt(0);
   }
   function bboxStr(S, W, N, E) { return S.toFixed(6) + ',' + W.toFixed(6) + ',' + N.toFixed(6) + ',' + E.toFixed(6); }
-  function cellQuery(c) {
+  function cellQuery(c, kind) {
     var S = c.j * CELL_DLAT, W = c.i * CELL_DLON, bb = bboxStr(S, W, S + CELL_DLAT, W + CELL_DLON);
-    return '[out:json][timeout:25];(way["building"](' + bb + ');way["highway"~"' + HW_RE + '"](' + bb + ');node["highway"="speed_camera"](' + bb + '););out geom qt;';
+    if (kind === 'b') return '[out:json][timeout:20];way["building"](' + bb + ');out geom qt;';
+    return '[out:json][timeout:20];(way["highway"~"' + HW_RE + '"](' + bb + ');node["highway"="speed_camera"](' + bb + '););out geom qt;';
+  }
+  function refreshCellList() {
+    cellList = [];
+    for (var kk in cells) { var c = cells[kk]; if (c.sr === 'ok' || c.sb === 'ok') cellList.push(c); }
+  }
+  function applyEls(cell, kind, els) {
+    var parsed = parseOsm({ elements: els });
+    if (kind === 'b') { cell.b = parsed.b; cell.sb = 'ok'; } else { cell.r = parsed.r; cell.sr = 'ok'; }
+    refreshCellList();
+  }
+  function startFetch(cell, c) {
+    var key = c.kind + ':' + cellKey(c.i, c.j), st = c.kind === 'b' ? 'sb' : 'sr', g = gen;
+    inflight++; cell[st] = 'loading';
+    overpass(cellQuery(c, c.kind), c.kind === 'b' ? 'edifici' : 'strade').then(function (json) {
+      if (g !== gen) return;
+      var els = json.elements || [];
+      applyEls(cell, c.kind, els);
+      netErr = 0;
+      cachePut(key, compactEls(els));
+    }, function () {
+      if (g !== gen) return;
+      cell[st] = 'err'; cell.t[c.kind] = Date.now(); netErr++;
+    }).then(function () { inflight--; pump(); });
   }
   function pump() {
-    if (loading || !queue.length || !ORG) return;
-    var here = toLL(car.x, car.y), cc = cellOf(here.lat, here.lon), bi = 0, bd = 1e9, k;
-    for (k = 0; k < queue.length; k++) {
-      var q = queue[k], d = (q.i - cc.i) * (q.i - cc.i) + (q.j - cc.j) * (q.j - cc.j);
-      if (d < bd) { bd = d; bi = k; }
+    if (!ORG) return;
+    while (inflight < 2 && queue.length) {
+      var ll = toLL(car.x, car.y), cc = cellOf(ll.lat, ll.lon), bi = -1, bs = 1e9, k;
+      for (k = 0; k < queue.length; k++) {
+        var q = queue[k], ring = Math.max(Math.abs(q.i - cc.i), Math.abs(q.j - cc.j)), sc = ring * 10 + (q.kind === 'b' ? 5 : 0);
+        if (sc < bs) { bs = sc; bi = k; }
+      }
+      var c = queue.splice(bi, 1)[0], cell = cells[cellKey(c.i, c.j)];
+      if (!cell || c.gen !== gen) continue;
+      startFetch(cell, c);
     }
-    var c = queue.splice(bi, 1)[0], key = cellKey(c.i, c.j), cell = cells[key];
-    if (!cell) return;
-    loading = true; cell.status = 'loading';
-    overpass(cellQuery(c)).then(function (json) {
-      var parsed = parseOsm(json);
-      cell.b = parsed.b; cell.r = parsed.r; cell.status = 'ok'; cell.t = Date.now();
-      netErr = 0;
-      cellList = []; for (var kk in cells) if (cells[kk].status === 'ok') cellList.push(cells[kk]);
-    }, function () {
-      cell.status = 'err'; cell.t = Date.now(); netErr++;
-    }).then(function () { loading = false; pump(); });
+  }
+  function wantKind(cell, kind) {
+    var st = kind === 'b' ? 'sb' : 'sr';
+    if (cell[st] === 'ok' || cell[st] === 'queued' || cell[st] === 'loading') return;
+    if (cell[st] === 'err' && Date.now() - cell.t[kind] < 20000) return;
+    cell[st] = 'loading';
+    var g = gen, key = kind + ':' + cellKey(cell.i, cell.j);
+    cacheGet(key).then(function (hit) {
+      if (g !== gen) return;
+      if (hit) { applyEls(cell, kind, expandEls(hit.els)); return; }
+      cell[st] = 'queued';
+      queue.push({ i: cell.i, j: cell.j, kind: kind, gen: g });
+      pump();
+    });
   }
   function wantCell(i, j) {
-    var key = cellKey(i, j), c = cells[key];
-    if (c && (c.status === 'ok' || c.status === 'queued' || c.status === 'loading')) return;
-    if (c && c.status === 'err' && Date.now() - c.t < 20000) return;
-    cells[key] = { i: i, j: j, status: 'queued', b: [], r: [], t: Date.now() };
-    queue.push({ i: i, j: j });
+    var key = cellKey(i, j), cell = cells[key];
+    if (!cell) cell = cells[key] = { i: i, j: j, b: [], r: [], sr: 'none', sb: 'none', t: { r: 0, b: 0 } };
+    wantKind(cell, 'r'); wantKind(cell, 'b');
+  }
+  function wantAround(x, y, r) {
+    var ll = toLL(x, y), c = cellOf(ll.lat, ll.lon);
+    for (var di = -1; di <= 1; di++) for (var dj = -1; dj <= 1; dj++) {
+      var i = c.i + di, j = c.j + dj, w = i * CELL_DLON, s = j * CELL_DLAT;
+      var dx = Math.max(w - ll.lon, 0, ll.lon - (w + CELL_DLON)) * ORG.kx, dy = Math.max(s - ll.lat, 0, ll.lat - (s + CELL_DLAT)) * ORG.ky;
+      if (Math.hypot(dx, dy) <= r) wantCell(i, j);
+    }
   }
   function ensureData() {
     if (!ORG) return;
-    var ll = toLL(car.x, car.y), c = cellOf(ll.lat, ll.lon), di, dj;
-    for (di = -1; di <= 1; di++) for (dj = -1; dj <= 1; dj++) wantCell(c.i + di, c.j + dj);
-    var ah = toLL(car.x + Math.cos(phi) * 500, car.y + Math.sin(phi) * 500), ca = cellOf(ah.lat, ah.lon);
-    wantCell(ca.i, ca.j);
+    wantAround(car.x, car.y, DATA_R);
+    wantAround(car.x + Math.cos(phi) * 380, car.y + Math.sin(phi) * 380, 200);
     if (route && (state === 'nav' || state === 'preview')) {
-      for (var d = prog.d; d < Math.min(route.total, prog.d + 1500); d += 300) {
-        var p = pointAt(route, d), l = toLL(p.x, p.y), cr = cellOf(l.lat, l.lon);
-        wantCell(cr.i, cr.j);
-      }
+      for (var d = prog.d; d < Math.min(route.total, prog.d + 1200); d += 250) { var p = pointAt(route, d); wantAround(p.x, p.y, 150); }
     }
     pump();
   }
   function dataStatus() {
-    var pending = 0, k;
-    for (k in cells) if (cells[k].status === 'queued' || cells[k].status === 'loading') pending++;
-    if (pending) return 'carico…';
-    if (netErr > 0 && !cellList.length) return 'rete assente';
+    var done = 0, total = 0, k, bad = 0;
+    for (k in cells) {
+      var c = cells[k], sts = [c.sr, c.sb];
+      for (var s = 0; s < 2; s++) { if (sts[s] === 'none') continue; total++; if (sts[s] === 'ok') done++; else if (sts[s] === 'err') bad++; }
+    }
+    if (done < total - bad) return 'carico ' + done + '/' + (total - bad);
+    if (bad && !done) return 'rete assente';
     return cellList.length ? 'ok' : '--';
+  }
+  function diagText() {
+    if (!diag.length) return 'Nessuna richiesta di rete ancora (mappa dalla cache o in attesa).';
+    return diag.map(function (d) { return d.host + ' · ' + d.kind + ' · ' + (d.ms / 1000).toFixed(1).replace('.', ',') + ' s · ' + d.res; }).join('\n');
   }
 
   /* ---------- Limite di velocità sotto l'auto ---------- */
@@ -507,7 +622,7 @@
     if (b[2] - b[0] > 4 || b[3] - b[1] > 6) return Promise.resolve();
     var bb = bboxStr(b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad);
     var q = '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed)$"](' + bb + '););out body;';
-    return overpass(q).then(function (j) { parseOsm(j); attachCams(rt); }, function () {});
+    return overpass(q, 'autovelox').then(function (j) { parseOsm(j); attachCams(rt); }, function () {});
   }
   function attachCams(rt) {
     rt.cams = [];
@@ -604,7 +719,7 @@
     if (!navigator.geolocation) { gpsErr = 'non supportato'; $('demoBtn').hidden = false; return; }
     navigator.geolocation.watchPosition(onFix, onGeoErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
   }
-  function resetData() { cells = {}; cellList = []; queue = []; SEEN = {}; CAMS = {}; camList = []; }
+  function resetData() { gen++; cells = {}; cellList = []; queue = []; SEEN = {}; CAMS = {}; camList = []; }
 
   /* ---------- Navigazione ---------- */
   var toastTimer = null;
@@ -812,6 +927,7 @@
       cam = camAhead();
     }
     if (state === 'preview') { setRow(1, 'GPS', gpsText); setRow(2, 'Mappa', dataStatus()); setRow(3, '', ''); }
+    if (menuOpen) { var dg = $('diag'); if (dg) dg.textContent = diagText(); }
     els.alert.hidden = !cam;
     if (cam) els.alertText.innerHTML = 'Autovelox fisso tra <span class="big">' + fmtDist(cam.dist) + '</span>' + (cam.limit ? ' · limite <span class="big">' + limitDisp(cam.limit) + '</span> ' + (prefs.units === 'mi' ? 'mph' : 'km/h') : '');
     announce(nm, cam);
@@ -1193,9 +1309,9 @@
     var gv = ctx.createRadialGradient(cm.cx, H * 0.6, Math.min(W, H) * 0.3, cm.cx, H * 0.6, Math.hypot(W, H) * 0.62);
     gv.addColorStop(0, bgA(0)); gv.addColorStop(1, bgA(0.6));
     ctx.fillStyle = gv; ctx.fillRect(0, 0, W, H);
-    if (!ORG || !car.has) {
+    if (!ORG || !car.has || !cellList.length) {
       ctx.fillStyle = 'rgba(169,159,208,0.9)'; ctx.font = '700 15px Nunito, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('Cerco la tua posizione…', cm.cx, H * 0.62);
+      ctx.fillText(!ORG || !car.has ? 'Cerco la tua posizione…' : 'Carico la mappa…', cm.cx, H * 0.62);
     }
   }
 
