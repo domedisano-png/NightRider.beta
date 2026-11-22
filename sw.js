@@ -1,6 +1,6 @@
 /* NightRider: salva i file dell'app per aprirla anche con poca rete.
    Mappe, percorsi e ricerche passano sempre dalla rete. */
-var CACHE = 'nightrider-v2';
+var CACHE = 'nightrider-v3';
 var SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png'];
 
 self.addEventListener('install', function (e) {

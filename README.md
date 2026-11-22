@@ -28,7 +28,8 @@ Alla prima apertura consenti l'accesso alla posizione. Se il GPS non c'è o lo r
 
 | Cosa | Servizio gratuito |
 | --- | --- |
-| Strade, edifici, autovelox, limiti | OpenStreetMap, tramite Overpass API |
+| Strade ed edifici | OpenStreetMap, tile vettoriali di OpenFreeMap |
+| Autovelox e limiti di velocità | OpenStreetMap, tramite Overpass API |
 | Percorsi e indicazioni | OSRM (server pubblici) |
 | Ricerca indirizzi | Photon e Nominatim |
 
@@ -47,4 +48,4 @@ La posizione e le destinazioni vengono inviate a questi servizi per ottenere i d
 
 Non serve nessuna compilazione: sono file statici (`index.html`, `app.css`, `app.js`, `sw.js`, `manifest.webmanifest`). Per provarlo in locale avvia un server nella cartella, per esempio `python3 -m http.server 8000`, e apri `http://localhost:8000`. Il GPS funziona su `localhost` e su indirizzi `https`.
 
-Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v1`, poi `v2` e così via), così i telefoni scaricano la versione nuova.
+Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v3`, poi `v4` e così via), così i telefoni scaricano la versione nuova.

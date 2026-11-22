@@ -267,7 +267,7 @@
     return out;
   }
   var gen = 0, inflight = 0, diag = [], reqN = 0, srvBad = [0, 0];
-  var DATA_R = 430, CACHE_TTL = 14 * 24 * 3600 * 1000, CACHE_V = 1;
+  var DATA_R = 430, CACHE_TTL = 14 * 24 * 3600 * 1000, CACHE_V = 2;
   var KEEP = ['building', 'height', 'building:levels', 'highway', 'maxspeed', 'area', 'enforcement'];
 
   /* Cache sul dispositivo (IndexedDB): la seconda volta nella stessa zona la mappa è subito pronta */
@@ -327,12 +327,18 @@
     return out;
   }
 
-  /* Richieste a Overpass: due in parallelo, su server diversi. Se uno è lento o fallisce si passa all'altro. */
+  /* ---------- Rete: tile vettoriali per strade ed edifici, Overpass solo per autovelox e limiti ---------- */
+  var TILE_Z = 14, TILE_URL = 'https://tiles.openfreemap.org/planet/latest/{z}/{x}/{y}.pbf', TILE_HOST = 'tiles.openfreemap.org';
+  var synthId = 100000000000, limWays = [], xcells = {}, xqueue = [], xInflight = 0;
+  var XD_LAT = 0.008, XD_LON = 0.011;   // celle di circa 900 m per autovelox e limiti
+
   function hostOf(u) { return u.replace(/^https?:\/\//, '').split('/')[0]; }
-  function logReq(si, kind, ms, res) {
-    diag.unshift({ host: hostOf(OVERPASS[si]), kind: kind, ms: ms, res: res });
+  function logReq(host, kind, ms, res) {
+    diag.unshift({ host: host, kind: kind, ms: ms, res: res });
     if (diag.length > 14) diag.length = 14;
   }
+
+  /* Overpass: usato solo per autovelox e limiti. Due server a rotazione. */
   function overpass(q, kind) {
     var order = [reqN % OVERPASS.length, (reqN + 1) % OVERPASS.length];
     reqN++;
@@ -340,85 +346,265 @@
     function attempt(k, lastErr) {
       if (k >= order.length) return Promise.reject(lastErr || new Error('overpass'));
       var si = order[k], t0 = Date.now();
-      return fetchJson(OVERPASS[si], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, k === 0 ? 16000 : 26000).then(function (j) {
-        logReq(si, kind, Date.now() - t0, 'ok');
+      return fetchJson(OVERPASS[si], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, k === 0 ? 14000 : 20000).then(function (j) {
+        logReq(hostOf(OVERPASS[si]), kind, Date.now() - t0, 'ok');
         return j;
       }, function (e) {
         srvBad[si] = Date.now() + 45000;
-        logReq(si, kind, Date.now() - t0, e && e.status ? 'errore ' + e.status : (e && e.message) || 'errore');
+        logReq(hostOf(OVERPASS[si]), kind, Date.now() - t0, e && e.status ? 'errore ' + e.status : (e && e.message) || 'errore');
         return attempt(k + 1, e);
       });
     }
     return attempt(0);
   }
   function bboxStr(S, W, N, E) { return S.toFixed(6) + ',' + W.toFixed(6) + ',' + N.toFixed(6) + ',' + E.toFixed(6); }
-  function cellQuery(c, kind) {
-    var S = c.j * CELL_DLAT, W = c.i * CELL_DLON, bb = bboxStr(S, W, S + CELL_DLAT, W + CELL_DLON);
-    if (kind === 'b') return '[out:json][timeout:20];way["building"](' + bb + ');out geom qt;';
-    return '[out:json][timeout:20];(way["highway"~"' + HW_RE + '"](' + bb + ');node["highway"="speed_camera"](' + bb + '););out geom qt;';
+
+  /* Decodifica dei tile vettoriali (formato Mapbox Vector Tile, protobuf) */
+  function mvtDecode(buf) {
+    var d = new Uint8Array(buf), p = 0, dv = new DataView(buf), layers = {};
+    function vi() { var r = 0, m = 1, b; do { b = d[p++]; r += (b & 127) * m; m *= 128; } while (b & 128 && p < d.length); return r; }
+    function str(s, e) { var o = ''; for (var i = s; i < e; i++) o += String.fromCharCode(d[i]); try { return decodeURIComponent(escape(o)); } catch (x) { return o; } }
+    function skip(w) { if (w === 0) vi(); else if (w === 1) p += 8; else if (w === 5) p += 4; else if (w === 2) p += vi(); else p = d.length; }
+    function readValue(s, e) {
+      var v = null; p = s;
+      while (p < e) {
+        var tg = vi(), f = Math.floor(tg / 8), w = tg & 7;
+        if (f === 1 && w === 2) { var l = vi(); v = str(p, p + l); p += l; }
+        else if (f === 2 && w === 5) { v = dv.getFloat32(p, true); p += 4; }
+        else if (f === 3 && w === 1) { v = dv.getFloat64(p, true); p += 8; }
+        else if ((f === 4 || f === 5) && w === 0) v = vi();
+        else if (f === 6 && w === 0) { var z = vi(); v = z % 2 ? -(z + 1) / 2 : z / 2; }
+        else if (f === 7 && w === 0) v = !!vi();
+        else skip(w);
+      }
+      return v;
+    }
+    function readFeature(s, e) {
+      var ft = { tags: [], type: 0, gs: 0, ge: 0 }; p = s;
+      while (p < e) {
+        var tg = vi(), f = Math.floor(tg / 8), w = tg & 7;
+        if (f === 2 && w === 2) { var l = vi(), end = p + l; while (p < end) ft.tags.push(vi()); }
+        else if (f === 3 && w === 0) ft.type = vi();
+        else if (f === 4 && w === 2) { var l2 = vi(); ft.gs = p; ft.ge = p + l2; p += l2; }
+        else skip(w);
+      }
+      return ft;
+    }
+    function readLayer(s, e) {
+      var L = { name: '', keys: [], vals: [], ext: 4096, feats: [] }; p = s;
+      while (p < e) {
+        var tg = vi(), f = Math.floor(tg / 8), w = tg & 7;
+        if (w === 2) {
+          var l = vi(), st = p, en = p + l;
+          if (f === 1) L.name = str(st, en);
+          else if (f === 2) { L.feats.push(readFeature(st, en)); }
+          else if (f === 3) L.keys.push(str(st, en));
+          else if (f === 4) L.vals.push(readValue(st, en));
+          p = en;
+        } else if (f === 5 && w === 0) L.ext = vi();
+        else skip(w);
+      }
+      return L;
+    }
+    while (p < d.length) {
+      var tg = vi(), f = Math.floor(tg / 8), w = tg & 7;
+      if (f === 3 && w === 2) { var l = vi(), st = p; p = st + l; var L = readLayer(st, st + l); layers[L.name] = L; p = st + l; }
+      else skip(w);
+    }
+    function props(L, ft) {
+      var o = {};
+      for (var i = 0; i + 1 < ft.tags.length; i += 2) o[L.keys[ft.tags[i]]] = L.vals[ft.tags[i + 1]];
+      return o;
+    }
+    function geom(ft) {
+      var out = [], cur = null, x = 0, y = 0; p = ft.gs;
+      while (p < ft.ge) {
+        var c = vi(), cmd = c & 7, cnt = Math.floor(c / 8);
+        if (cmd === 7) continue;
+        for (var i = 0; i < cnt; i++) {
+          var dx = vi(), dy = vi();
+          x += dx % 2 ? -(dx + 1) / 2 : dx / 2; y += dy % 2 ? -(dy + 1) / 2 : dy / 2;
+          if (cmd === 1) { cur = [x, y]; out.push(cur); } else if (cur) cur.push(x, y);
+        }
+      }
+      return out;
+    }
+    return { layers: layers, props: props, geom: geom };
   }
+
+  var OMT_HW = { motorway: 'motorway', trunk: 'trunk', primary: 'primary', secondary: 'secondary', tertiary: 'tertiary', minor: 'residential', service: 'service' };
+  function tileToEls(buf, tx, ty) {
+    var T = mvtDecode(buf), els = [], n = Math.pow(2, TILE_Z), i, j, k;
+    function pt(px, py, ext) {
+      var yy = Math.PI * (1 - 2 * (ty + py / ext) / n);
+      return { lat: Math.atan(Math.sinh(yy)) * 180 / Math.PI, lon: (tx + px / ext) / n * 360 - 180 };
+    }
+    var B = T.layers.building;
+    if (B) for (i = 0; i < B.feats.length; i++) {
+      var bf = B.feats[i];
+      if (bf.type !== 3) continue;
+      var bp = T.props(B, bf);
+      if (bp.render_min_height > 0) continue;
+      var rings = T.geom(bf), s0 = 0;
+      for (j = 0; j < rings.length; j++) {
+        var rg = rings[j], A = 0, m = rg.length / 2;
+        if (m < 3) continue;
+        for (k = 0; k < m; k++) { var k2 = (k + 1) % m; A += rg[2 * k] * rg[2 * k2 + 1] - rg[2 * k2] * rg[2 * k + 1]; }
+        var sg = A > 0 ? 1 : -1;
+        if (!s0) s0 = sg;
+        if (sg !== s0) continue;          // i buchi interni non servono
+        var g = [];
+        for (k = 0; k < m; k++) g.push(pt(rg[2 * k], rg[2 * k + 1], B.ext));
+        g.push(g[0]);
+        var tg = { building: 'yes' };
+        if (bp.render_height > 0 && bp.render_height !== 5) tg.height = bp.render_height;
+        els.push({ type: 'way', id: synthId++, tags: tg, geometry: g });
+      }
+    }
+    var R = T.layers.transportation;
+    if (R) for (i = 0; i < R.feats.length; i++) {
+      var rf = R.feats[i];
+      if (rf.type !== 2) continue;
+      var rp = T.props(R, rf), hw = OMT_HW[rp.class];
+      if (!hw) continue;
+      if (rp.ramp === 1 || rp.ramp === true) hw = hw === 'motorway' ? 'motorway_link' : hw === 'trunk' ? 'trunk_link' : hw + '_link';
+      var lines = T.geom(rf);
+      for (j = 0; j < lines.length; j++) {
+        var ln = lines[j], g2 = [];
+        if (ln.length < 4) continue;
+        for (k = 0; k < ln.length; k += 2) g2.push(pt(ln[k], ln[k + 1], R.ext));
+        els.push({ type: 'way', id: synthId++, tags: { highway: hw }, geometry: g2 });
+      }
+    }
+    return els;
+  }
+
+  function gunzip(buf) {
+    var u = new Uint8Array(buf);
+    if (u.length > 2 && u[0] === 0x1f && u[1] === 0x8b && window.DecompressionStream) {
+      return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    }
+    return Promise.resolve(buf);
+  }
+  function fetchTile(x, y, ms) {
+    return new Promise(function (resolve, reject) {
+      var ctl = window.AbortController ? new AbortController() : null, done = false;
+      var timer = setTimeout(function () { if (done) return; done = true; if (ctl) ctl.abort(); reject(new Error('timeout')); }, ms);
+      function fail(e) { if (done) return; done = true; clearTimeout(timer); reject(e); }
+      fetch(TILE_URL.replace('{z}', TILE_Z).replace('{x}', x).replace('{y}', y), ctl ? { signal: ctl.signal } : {}).then(function (r) {
+        if (r.status === 404 || r.status === 204) { if (!done) { done = true; clearTimeout(timer); resolve(new ArrayBuffer(0)); } return; }
+        if (!r.ok) { var e = new Error('http ' + r.status); e.status = r.status; return fail(e); }
+        return r.arrayBuffer().then(gunzip).then(function (b) { if (done) return; done = true; clearTimeout(timer); resolve(b); });
+      }).catch(fail);
+    });
+  }
+  function fetchTileRetry(x, y) {
+    var t0 = Date.now();
+    return fetchTile(x, y, 12000).then(function (b) { return b; }, function (e) {
+      logReq(TILE_HOST, 'mappa', Date.now() - t0, e && e.status ? 'errore ' + e.status : (e && e.message) || 'errore');
+      t0 = Date.now();
+      return fetchTile(x, y, 20000);
+    });
+  }
+  function tileOf(lat, lon) {
+    var n = Math.pow(2, TILE_Z), r = lat * Math.PI / 180;
+    return { x: Math.floor((lon + 180) / 360 * n), y: Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n) };
+  }
+
   function refreshCellList() {
     cellList = [];
-    for (var kk in cells) { var c = cells[kk]; if (c.sr === 'ok' || c.sb === 'ok') cellList.push(c); }
+    for (var kk in cells) { var c = cells[kk]; if (c.sr === 'ok') cellList.push(c); }
   }
-  function applyEls(cell, kind, els) {
-    var parsed = parseOsm({ elements: els });
-    if (kind === 'b') { cell.b = parsed.b; cell.sb = 'ok'; } else { cell.r = parsed.r; cell.sr = 'ok'; }
+  function applyTile(cell, buf) {
+    var parsed = parseOsm({ elements: buf && buf.byteLength ? tileToEls(buf, cell.i, cell.j) : [] });
+    cell.b = parsed.b; cell.r = parsed.r; cell.sr = cell.sb = 'ok';
     refreshCellList();
   }
-  function startFetch(cell, c) {
-    var key = c.kind + ':' + cellKey(c.i, c.j), st = c.kind === 'b' ? 'sb' : 'sr', g = gen;
-    inflight++; cell[st] = 'loading';
-    overpass(cellQuery(c, c.kind), c.kind === 'b' ? 'edifici' : 'strade').then(function (json) {
+  function startTile(cell, g) {
+    var t0 = Date.now(), key = 't:' + cell.i + ',' + cell.j;
+    inflight++; cell.sr = cell.sb = 'loading';
+    fetchTileRetry(cell.i, cell.j).then(function (buf) {
       if (g !== gen) return;
-      var els = json.elements || [];
-      applyEls(cell, c.kind, els);
-      netErr = 0;
-      cachePut(key, compactEls(els));
-    }, function () {
+      logReq(TILE_HOST, 'mappa', Date.now() - t0, 'ok · ' + Math.round(buf.byteLength / 1024) + ' KB');
+      try { applyTile(cell, buf); netErr = 0; cachePut(key, buf); }
+      catch (e) { cell.sr = cell.sb = 'err'; cell.t = Date.now(); }
+    }, function (e) {
       if (g !== gen) return;
-      cell[st] = 'err'; cell.t[c.kind] = Date.now(); netErr++;
+      logReq(TILE_HOST, 'mappa', Date.now() - t0, e && e.status ? 'errore ' + e.status : (e && e.message) || 'errore');
+      cell.sr = cell.sb = 'err'; cell.t = Date.now(); netErr++;
     }).then(function () { inflight--; pump(); });
   }
   function pump() {
     if (!ORG) return;
-    while (inflight < 2 && queue.length) {
-      var ll = toLL(car.x, car.y), cc = cellOf(ll.lat, ll.lon), bi = -1, bs = 1e9, k;
+    while (inflight < 3 && queue.length) {
+      var ll = toLL(car.x, car.y), cc = tileOf(ll.lat, ll.lon), bi = 0, bs = 1e9, k;
       for (k = 0; k < queue.length; k++) {
-        var q = queue[k], ring = Math.max(Math.abs(q.i - cc.i), Math.abs(q.j - cc.j)), sc = ring * 10 + (q.kind === 'b' ? 5 : 0);
-        if (sc < bs) { bs = sc; bi = k; }
+        var q = queue[k], ring = Math.max(Math.abs(q.cell.i - cc.x), Math.abs(q.cell.j - cc.y));
+        if (ring < bs) { bs = ring; bi = k; }
       }
-      var c = queue.splice(bi, 1)[0], cell = cells[cellKey(c.i, c.j)];
-      if (!cell || c.gen !== gen) continue;
-      startFetch(cell, c);
+      var it = queue.splice(bi, 1)[0];
+      if (it.gen !== gen) continue;
+      startTile(it.cell, it.gen);
     }
   }
-  function wantKind(cell, kind) {
-    var st = kind === 'b' ? 'sb' : 'sr';
-    if (cell[st] === 'ok' || cell[st] === 'queued' || cell[st] === 'loading') return;
-    if (cell[st] === 'err' && Date.now() - cell.t[kind] < 20000) return;
-    cell[st] = 'loading';
-    var g = gen, key = kind + ':' + cellKey(cell.i, cell.j);
-    cacheGet(key).then(function (hit) {
+  function wantTile(tx, ty) {
+    var key = tx + ',' + ty, cell = cells[key];
+    if (!cell) cell = cells[key] = { i: tx, j: ty, b: [], r: [], sr: 'none', sb: 'none', t: 0 };
+    if (cell.sr === 'ok' || cell.sr === 'queued' || cell.sr === 'loading') return;
+    if (cell.sr === 'err' && Date.now() - cell.t < 8000) return;
+    cell.sr = cell.sb = 'loading';
+    var g = gen;
+    cacheGet('t:' + key).then(function (hit) {
       if (g !== gen) return;
-      if (hit) { applyEls(cell, kind, expandEls(hit.els)); return; }
-      cell[st] = 'queued';
-      queue.push({ i: cell.i, j: cell.j, kind: kind, gen: g });
+      if (hit && hit.els) { try { applyTile(cell, hit.els); return; } catch (e) {} }
+      cell.sr = cell.sb = 'queued';
+      queue.push({ cell: cell, gen: g });
       pump();
     });
   }
-  function wantCell(i, j) {
-    var key = cellKey(i, j), cell = cells[key];
-    if (!cell) cell = cells[key] = { i: i, j: j, b: [], r: [], sr: 'none', sb: 'none', t: { r: 0, b: 0 } };
-    wantKind(cell, 'r'); wantKind(cell, 'b');
+
+  /* Autovelox e limiti di velocità: da Overpass, in secondo piano, una richiesta alla volta */
+  function applyExtra(els) {
+    var parsed = parseOsm({ elements: els });
+    for (var i = 0; i < parsed.r.length; i++) if (parsed.r[i].ms) limWays.push(parsed.r[i]);
   }
-  function wantAround(x, y, r) {
-    var ll = toLL(x, y), c = cellOf(ll.lat, ll.lon);
-    for (var di = -1; di <= 1; di++) for (var dj = -1; dj <= 1; dj++) {
-      var i = c.i + di, j = c.j + dj, w = i * CELL_DLON, s = j * CELL_DLAT;
-      var dx = Math.max(w - ll.lon, 0, ll.lon - (w + CELL_DLON)) * ORG.kx, dy = Math.max(s - ll.lat, 0, ll.lat - (s + CELL_DLAT)) * ORG.ky;
-      if (Math.hypot(dx, dy) <= r) wantCell(i, j);
+  function extraQuery(i, j) {
+    var S = j * XD_LAT, W = i * XD_LON, bb = bboxStr(S, W, S + XD_LAT, W + XD_LON);
+    return '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed)$"](' + bb + ');way["highway"~"' + HW_RE + '"]["maxspeed"](' + bb + '););out geom qt;';
+  }
+  function wantExtra(i, j) {
+    var key = i + ',' + j, xc = xcells[key];
+    if (xc && (xc.s === 'ok' || xc.s === 'loading' || xc.s === 'queued' || (xc.s === 'err' && Date.now() - xc.t < 60000))) return;
+    xc = xcells[key] = { i: i, j: j, s: 'loading', t: 0 };
+    var g = gen;
+    cacheGet('x:' + key).then(function (hit) {
+      if (g !== gen) return;
+      if (hit && hit.els) { applyExtra(expandEls(hit.els)); xc.s = 'ok'; return; }
+      xc.s = 'queued'; xqueue.push({ xc: xc, gen: g }); pumpExtra();
+    });
+  }
+  function pumpExtra() {
+    while (xInflight < 1 && xqueue.length) {
+      var it = xqueue.shift();
+      if (it.gen !== gen) continue;
+      (function (xc, g) {
+        xInflight++;
+        overpass(extraQuery(xc.i, xc.j), 'autovelox').then(function (j) {
+          if (g !== gen) return;
+          var els = j.elements || [];
+          applyExtra(els); xc.s = 'ok'; cachePut('x:' + xc.i + ',' + xc.j, compactEls(els));
+        }, function () { if (g !== gen) return; xc.s = 'err'; xc.t = Date.now(); }).then(function () { xInflight--; pumpExtra(); });
+      })(it.xc, it.gen);
     }
+  }
+
+  function wantAround(x, y, r) {
+    var ll = toLL(x, y), dLat = r / ORG.ky, dLon = r / ORG.kx, tx, ty, i, j;
+    var a = tileOf(ll.lat + dLat, ll.lon - dLon), b = tileOf(ll.lat - dLat, ll.lon + dLon);
+    for (tx = a.x; tx <= b.x; tx++) for (ty = a.y; ty <= b.y; ty++) wantTile(tx, ty);
+    var i0 = Math.floor((ll.lon - dLon) / XD_LON), i1 = Math.floor((ll.lon + dLon) / XD_LON);
+    var j0 = Math.floor((ll.lat - dLat) / XD_LAT), j1 = Math.floor((ll.lat + dLat) / XD_LAT);
+    for (i = i0; i <= i1; i++) for (j = j0; j <= j1; j++) wantExtra(i, j);
   }
   function ensureData() {
     if (!ORG) return;
@@ -430,14 +616,11 @@
     pump();
   }
   function dataStatus() {
-    var done = 0, total = 0, k, bad = 0;
-    for (k in cells) {
-      var c = cells[k], sts = [c.sr, c.sb];
-      for (var s = 0; s < 2; s++) { if (sts[s] === 'none') continue; total++; if (sts[s] === 'ok') done++; else if (sts[s] === 'err') bad++; }
-    }
-    if (done < total - bad) return 'carico ' + done + '/' + (total - bad);
+    var done = 0, total = 0, bad = 0, k;
+    for (k in cells) { total++; if (cells[k].sr === 'ok') done++; else if (cells[k].sr === 'err') bad++; }
+    if (done + bad < total) return 'carico ' + done + '/' + (total - bad);
     if (bad && !done) return 'rete assente';
-    return cellList.length ? 'ok' : '--';
+    return done ? 'ok' : '--';
   }
   function diagText() {
     if (!diag.length) return 'Nessuna richiesta di rete ancora (mappa dalla cache o in attesa).';
@@ -448,8 +631,8 @@
   var limitNow = 0;
   function updateLimit() {
     var best = 0, bd = 20 * 20, x = car.x, y = car.y;
-    for (var c = 0; c < cellList.length; c++) {
-      var rs = cellList[c].r;
+    for (var c = 0; c < 1; c++) {
+      var rs = limWays;
       for (var r = 0; r < rs.length; r++) {
         var rd = rs[r];
         if (!rd.ms || x < rd.minx - 20 || x > rd.maxx + 20 || y < rd.miny - 20 || y > rd.maxy + 20) continue;
@@ -719,7 +902,7 @@
     if (!navigator.geolocation) { gpsErr = 'non supportato'; $('demoBtn').hidden = false; return; }
     navigator.geolocation.watchPosition(onFix, onGeoErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
   }
-  function resetData() { gen++; cells = {}; cellList = []; queue = []; SEEN = {}; CAMS = {}; camList = []; }
+  function resetData() { gen++; cells = {}; cellList = []; queue = []; SEEN = {}; CAMS = {}; camList = []; limWays = []; xcells = {}; xqueue = []; }
 
   /* ---------- Navigazione ---------- */
   var toastTimer = null;
