@@ -1,0 +1,493 @@
+/* NightRider: lingue, testi dell'interfaccia e stili delle indicazioni vocali.
+   Gli stili Cyberpunk, Divertente, Rockerboy e Netrunner sono testi originali ispirati
+   ad archetipi del genere; non usano nomi, battute o materiali di opere esistenti. */
+(function () {
+  var L = {};
+  L.langs = [
+    { id: 'it', name: 'Italiano', bcp: 'it-IT' },
+    { id: 'en', name: 'English', bcp: 'en-GB' },
+    { id: 'es', name: 'Español', bcp: 'es-ES' },
+    { id: 'fr', name: 'Français', bcp: 'fr-FR' },
+    { id: 'de', name: 'Deutsch', bcp: 'de-DE' }
+  ];
+
+  /* Unità parlate */
+  L.say = {
+    it: { m: 'metri', km: 'chilometri', oneKm: 'un chilometro', mi: 'miglia', ft: 'piedi', dec: ',' },
+    en: { m: 'meters', km: 'kilometers', oneKm: 'one kilometer', mi: 'miles', ft: 'feet', dec: '.' },
+    es: { m: 'metros', km: 'kilómetros', oneKm: 'un kilómetro', mi: 'millas', ft: 'pies', dec: ',' },
+    fr: { m: 'mètres', km: 'kilomètres', oneKm: 'un kilomètre', mi: 'miles', ft: 'pieds', dec: ',' },
+    de: { m: 'Metern', km: 'Kilometern', oneKm: 'einem Kilometer', mi: 'Meilen', ft: 'Fuß', dec: ',' }
+  };
+
+  /* ---------- Interfaccia ---------- */
+  L.ui = {};
+  L.ui.it = {
+    aMap: 'Mappa a tema neon con il percorso evidenziato in azzurro', phQ: 'Dove vuoi andare?', aSearch: 'Ricerca destinazione',
+    gpsWait: 'In attesa del GPS…', demoBtn: 'Prova da una posizione di esempio (Milano)', aTurn: 'Prossima manovra',
+    go: 'Avvia', sim: 'Prova senza muoverti', cancel: 'Annulla', aPreview: 'Riepilogo del percorso', aStats: 'Velocità e arrivo',
+    aLimit: 'Limite di velocità', lGps: 'GPS', lMap: 'Mappa', lArr: 'Arrivo', lLeft: 'Resta', lDist: 'Distanza',
+    zIn: 'Avvicina la mappa', zOut: 'Allontana la mappa', to2d: 'Passa alla vista 2D', to3d: 'Passa alla vista 3D', recenter: 'Torna alla mia posizione',
+    menuAria: 'Menu e preferenze', endAria: 'Termina', pauseSim: 'Pausa simulazione', resumeSim: 'Riprendi simulazione',
+    menuTitle: 'Preferenze', closeMenu: 'Chiudi il menu',
+    sLang: 'Lingua', langLbl: 'Lingua dell\'app e della voce', langNote: 'Cambia anche le frasi della guida vocale.',
+    sRoute: 'Percorso', routeType: 'Percorso suggerito per primo', fast: 'Più veloce', short: 'Più breve', simple: 'Meno svolte',
+    avoidHw: 'Evita le autostrade', avoidToll: 'Evita i pedaggi',
+    routeNote: 'Prima di partire vedi fino a tre alternative e scegli tu. Il calcolo usa server gratuiti: se non supportano le esclusioni, il percorso viene calcolato senza e ti avviso.',
+    sVehicle: 'Il tuo mezzo', aIcon: 'Icona del mezzo', iArrow: 'Freccia', iCar: 'Auto', iMoto: 'Moto', colorLbl: 'Colore',
+    cYellow: 'Giallo', cCyan: 'Azzurro', cFuchsia: 'Fucsia', cWhite: 'Bianco', cOrange: 'Arancio',
+    sVoice: 'Voce', vOn: 'Guida vocale', vTurn: 'Annuncia le svolte', vCam: 'Avvisa degli autovelox',
+    personaLbl: 'Stile delle indicazioni', pClassic: 'Classico', pCyber: 'Cyberpunk', pFun: 'Divertente', pRocker: 'Rockerboy', pHacker: 'Netrunner',
+    personaNote: 'Gli stili Cyberpunk, Divertente, Rockerboy e Netrunner sono disponibili in italiano e inglese; nelle altre lingue si usa il Classico.',
+    toneLbl: 'Tono della voce', tNatural: 'Naturale', tSoft: 'Più calma', voiceLbl: 'Voce', volLbl: 'Volume', testVoice: 'Prova la voce',
+    voiceAuto: 'Automatica (la migliore disponibile)', voiceNat: ' · naturale', voiceUse: 'Voce in uso: {0}', voiceNone: 'Nessuna voce per questa lingua: uso quella predefinita del dispositivo.',
+    voiceNA: 'La sintesi vocale non è disponibile su questo dispositivo.', refreshVoices: 'Aggiorna l\'elenco delle voci', allLangs: 'Mostra le voci di tutte le lingue',
+    voiceCount: '{0} voci trovate sul dispositivo.',
+    tipsSum: 'Come aggiungere o migliorare le voci',
+    tip1: 'Le voci sono quelle installate sul dispositivo: l\'app non può scaricarne da sola. Dopo averne aggiunta una, tocca "Aggiorna l\'elenco delle voci".',
+    tip2: 'iPhone: Impostazioni, Accessibilità, Contenuto parlato, Voci, scegli la lingua e scarica una voce Avanzata o Premium.',
+    tip3: 'Android e radio Android: Impostazioni, Sistema, Lingue e input, Sintesi vocale, Installa dati vocali. Su Chrome prova "Google" nella lista.',
+    tip4: 'Edge su computer: scegli una voce con "Online (Natural)" nel nome.',
+    sMap: 'Mappa', camsShow: 'Mostra gli autovelox', gloss: 'Riflessi sulle case', themeLbl: 'Colore delle case', thFuchsia: 'Fucsia', thCyan: 'Ciano', thAmber: 'Ambra',
+    view2d: 'Vista dall\'alto (2D)', tiltLbl: 'Inclinazione della vista',
+    sTraffic: 'Autovelox e traffico', ttLbl: 'Chiave TomTom (facoltativa)', ttPh: 'Incolla qui la tua chiave',
+    ttNote: 'Il traffico in tempo reale non esiste gratis senza registrazione. Con una chiave gratuita di TomTom (circa 2.500 richieste al giorno) i percorsi tengono conto del traffico. La chiave resta solo su questo dispositivo.',
+    ttLink: 'Ottieni una chiave gratuita', reportCam: 'Aggiungi un autovelox qui', reportDone: 'Autovelox salvato sul dispositivo.', reportClear: 'Cancella i miei autovelox',
+    reportCleared: 'Autovelox personali cancellati.', reportNeedPos: 'Serve la posizione per aggiungere un autovelox.', reportNote: 'Gli autovelox che aggiungi restano sul tuo dispositivo e non vengono condivisi.',
+    sOther: 'Altro', wake: 'Tieni lo schermo acceso in navigazione', unitsLbl: 'Unità di misura', kmUnit: 'Chilometri', miUnit: 'Miglia',
+    simLbl: 'Velocità della simulazione', reset: 'Ripristina le impostazioni iniziali',
+    sInfo: 'Informazioni',
+    info1: 'Mappe, strade ed edifici: dati © contributori di OpenStreetMap, tile di OpenFreeMap (© OpenMapTiles). Autovelox e limiti: OpenStreetMap via Overpass. Percorsi: OSRM (e TomTom se inserisci la chiave). Ricerca indirizzi: Photon e Nominatim.',
+    info2: 'Senza chiave TomTom le durate sono stime senza traffico.',
+    info3: 'Gli avvisi riguardano gli autovelox fissi segnati su OpenStreetMap e quelli che aggiungi tu. Possono mancare, essere cambiati o non più attivi. Rispetta sempre limiti e segnaletica.',
+    info4: 'Per cercare e calcolare i percorsi, la posizione e le destinazioni vengono inviate ai servizi qui sopra.', diagSum: 'Diagnostica caricamento', diagNone: 'Nessuna richiesta di rete ancora (mappa dalla cache o in attesa).',
+    searching: 'Cerco…', noResults: 'Nessun risultato. Prova con indirizzo e città.', needPos: 'Serve la posizione. Attiva il GPS oppure usa la posizione di esempio.',
+    calcRoute: 'Calcolo i percorsi…', noRoute: 'Nessun percorso trovato verso questa destinazione.', srvDown: 'Server dei percorsi non raggiungibile. Riprova tra poco.',
+    dropped: 'Il server non supporta le esclusioni scelte: percorso calcolato senza. ', noTraffic: 'Durata stimata senza traffico.', withTraffic: 'Durata con traffico attuale.',
+    arrivedT: 'Sei arrivato', reached: 'Hai raggiunto {0}.', onSt: 'Su {0}', rerouteToast: 'Ricalcolo del percorso…', rerouteFail: 'Non riesco a ricalcolare: server non raggiungibile.',
+    gpsSim: 'simulato', gpsExample: 'di esempio', gpsWaiting: 'in attesa', gpsDeniedS: 'negato', gpsNA: 'non disponibile',
+    gpsFound: 'Posizione trovata ({0}). Scrivi dove vuoi andare.', gpsUsingExample: 'Sto usando una posizione di esempio a Milano.', gpsDenied: 'Posizione negata. Abilitala nelle impostazioni del browser per questo sito.',
+    gpsNoSupport: 'Questo browser non fornisce la posizione.', gpsWaitLine: 'In attesa del GPS…',
+    camHud: 'Autovelox fisso tra', limitWord: 'limite', limitAria: 'Limite di velocità {0}', limitUnknown: 'Limite non noto',
+    searchPos: 'Cerco la tua posizione…', loadMap: 'Carico la mappa…', mapLoading: 'carico {0}/{1}', mapNoNet: 'rete assente', mapOk: 'ok',
+    chooseRoute: 'Scegli il percorso', altFast: 'Più veloce', altShort: 'Più breve', altSimple: 'Meno svolte', altNoHw: 'Senza autostrade', altOther: 'Alternativo', altTurns: '{0} svolte',
+    altSame: 'come il più veloce', altPlus: '+{0}', altMinus: '−{0}', altTraffic: '{0} di ritardo', altRoute: 'Percorso {0}',
+    min: 'min', hour: 'h', testPhrase: 'Ciao, sono la tua voce di bordo. Tra trecento metri, svolta a destra.',
+    worldHint: 'Pizzica per tornare ai dettagli', routeCamsNote: 'Autovelox sul percorso: {0}'
+  };
+  L.ui.en = {
+    aMap: 'Neon-style map with the route highlighted in cyan', phQ: 'Where do you want to go?', aSearch: 'Destination search',
+    gpsWait: 'Waiting for GPS…', demoBtn: 'Try a sample location (Milan)', aTurn: 'Next maneuver',
+    go: 'Start', sim: 'Try without moving', cancel: 'Cancel', aPreview: 'Route summary', aStats: 'Speed and arrival',
+    aLimit: 'Speed limit', lGps: 'GPS', lMap: 'Map', lArr: 'Arrival', lLeft: 'Left', lDist: 'Distance',
+    zIn: 'Zoom in', zOut: 'Zoom out', to2d: 'Switch to 2D view', to3d: 'Switch to 3D view', recenter: 'Back to my position',
+    menuAria: 'Menu and preferences', endAria: 'End', pauseSim: 'Pause simulation', resumeSim: 'Resume simulation',
+    menuTitle: 'Preferences', closeMenu: 'Close the menu',
+    sLang: 'Language', langLbl: 'App and voice language', langNote: 'This also changes the voice guidance phrases.',
+    sRoute: 'Route', routeType: 'Route suggested first', fast: 'Fastest', short: 'Shortest', simple: 'Fewest turns',
+    avoidHw: 'Avoid highways', avoidToll: 'Avoid tolls',
+    routeNote: 'Before you start you see up to three alternatives and choose. Routing uses free servers: if they do not support the exclusions, the route is calculated without them and you are told.',
+    sVehicle: 'Your vehicle', aIcon: 'Vehicle icon', iArrow: 'Arrow', iCar: 'Car', iMoto: 'Bike', colorLbl: 'Color',
+    cYellow: 'Yellow', cCyan: 'Cyan', cFuchsia: 'Fuchsia', cWhite: 'White', cOrange: 'Orange',
+    sVoice: 'Voice', vOn: 'Voice guidance', vTurn: 'Announce turns', vCam: 'Warn about speed cameras',
+    personaLbl: 'Directions style', pClassic: 'Classic', pCyber: 'Cyberpunk', pFun: 'Fun', pRocker: 'Rockerboy', pHacker: 'Netrunner',
+    personaNote: 'Cyberpunk, Fun, Rockerboy and Netrunner styles are available in Italian and English; other languages use Classic.',
+    toneLbl: 'Voice tone', tNatural: 'Natural', tSoft: 'Calmer', voiceLbl: 'Voice', volLbl: 'Volume', testVoice: 'Test the voice',
+    voiceAuto: 'Automatic (best available)', voiceNat: ' · natural', voiceUse: 'Voice in use: {0}', voiceNone: 'No voice for this language: using the device default.',
+    voiceNA: 'Speech synthesis is not available on this device.', refreshVoices: 'Refresh the voice list', allLangs: 'Show voices for all languages',
+    voiceCount: '{0} voices found on this device.',
+    tipsSum: 'How to add or improve voices',
+    tip1: 'Voices are the ones installed on the device: the app cannot download them. After adding one, tap "Refresh the voice list".',
+    tip2: 'iPhone: Settings, Accessibility, Spoken Content, Voices, pick the language and download an Enhanced or Premium voice.',
+    tip3: 'Android and Android head units: Settings, System, Languages & input, Text-to-speech, Install voice data. In Chrome try "Google" in the list.',
+    tip4: 'Edge on desktop: choose a voice with "Online (Natural)" in the name.',
+    sMap: 'Map', camsShow: 'Show speed cameras', gloss: 'Reflections on buildings', themeLbl: 'Building color', thFuchsia: 'Fuchsia', thCyan: 'Cyan', thAmber: 'Amber',
+    view2d: 'Top-down view (2D)', tiltLbl: 'View tilt',
+    sTraffic: 'Speed cameras and traffic', ttLbl: 'TomTom key (optional)', ttPh: 'Paste your key here',
+    ttNote: 'Live traffic is not free without signing up. With a free TomTom key (about 2,500 requests a day) routes take traffic into account. The key stays on this device only.',
+    ttLink: 'Get a free key', reportCam: 'Add a speed camera here', reportDone: 'Speed camera saved on this device.', reportClear: 'Delete my speed cameras',
+    reportCleared: 'Personal speed cameras deleted.', reportNeedPos: 'Your position is needed to add a speed camera.', reportNote: 'Speed cameras you add stay on your device and are not shared.',
+    sOther: 'Other', wake: 'Keep the screen on while navigating', unitsLbl: 'Units', kmUnit: 'Kilometers', miUnit: 'Miles',
+    simLbl: 'Simulation speed', reset: 'Restore default settings',
+    sInfo: 'About',
+    info1: 'Maps, roads and buildings: data © OpenStreetMap contributors, tiles by OpenFreeMap (© OpenMapTiles). Speed cameras and limits: OpenStreetMap via Overpass. Routes: OSRM (and TomTom if you add a key). Address search: Photon and Nominatim.',
+    info2: 'Without a TomTom key, durations are estimates without traffic.',
+    info3: 'Alerts cover fixed speed cameras mapped on OpenStreetMap and the ones you add. They can be missing, changed or no longer active. Always follow limits and signs.',
+    info4: 'To search and calculate routes, your position and destinations are sent to the services above.', diagSum: 'Loading diagnostics', diagNone: 'No network requests yet (map from cache or waiting).',
+    searching: 'Searching…', noResults: 'No results. Try an address and city.', needPos: 'Your position is needed. Turn on GPS or use the sample location.',
+    calcRoute: 'Calculating routes…', noRoute: 'No route found to this destination.', srvDown: 'Routing server unreachable. Try again shortly.',
+    dropped: 'The server does not support the chosen exclusions: route calculated without them. ', noTraffic: 'Estimated duration without traffic.', withTraffic: 'Duration with current traffic.',
+    arrivedT: 'You have arrived', reached: 'You reached {0}.', onSt: 'On {0}', rerouteToast: 'Recalculating the route…', rerouteFail: 'Cannot recalculate: server unreachable.',
+    gpsSim: 'simulated', gpsExample: 'sample', gpsWaiting: 'waiting', gpsDeniedS: 'denied', gpsNA: 'unavailable',
+    gpsFound: 'Position found ({0}). Type where you want to go.', gpsUsingExample: 'Using a sample position in Milan.', gpsDenied: 'Location denied. Enable it in the browser settings for this site.',
+    gpsNoSupport: 'This browser does not provide location.', gpsWaitLine: 'Waiting for GPS…',
+    camHud: 'Fixed speed camera in', limitWord: 'limit', limitAria: 'Speed limit {0}', limitUnknown: 'Limit unknown',
+    searchPos: 'Finding your position…', loadMap: 'Loading the map…', mapLoading: 'loading {0}/{1}', mapNoNet: 'no network', mapOk: 'ok',
+    chooseRoute: 'Choose the route', altFast: 'Fastest', altShort: 'Shortest', altSimple: 'Fewest turns', altNoHw: 'No highways', altOther: 'Alternative', altTurns: '{0} turns',
+    altSame: 'same as the fastest', altPlus: '+{0}', altMinus: '−{0}', altTraffic: '{0} delay', altRoute: 'Route {0}',
+    min: 'min', hour: 'h', testPhrase: 'Hi, I am your onboard voice. In three hundred meters, turn right.',
+    worldHint: 'Pinch to go back to details', routeCamsNote: 'Speed cameras on route: {0}'
+  };
+  L.ui.es = {
+    aMap: 'Mapa de estilo neón con la ruta resaltada en azul', phQ: '¿A dónde quieres ir?', aSearch: 'Búsqueda de destino',
+    gpsWait: 'Esperando el GPS…', demoBtn: 'Probar con una ubicación de ejemplo (Milán)', aTurn: 'Próxima maniobra',
+    go: 'Iniciar', sim: 'Probar sin moverte', cancel: 'Cancelar', aPreview: 'Resumen de la ruta', aStats: 'Velocidad y llegada',
+    aLimit: 'Límite de velocidad', lGps: 'GPS', lMap: 'Mapa', lArr: 'Llegada', lLeft: 'Falta', lDist: 'Distancia',
+    zIn: 'Acercar el mapa', zOut: 'Alejar el mapa', to2d: 'Cambiar a vista 2D', to3d: 'Cambiar a vista 3D', recenter: 'Volver a mi posición',
+    menuAria: 'Menú y preferencias', endAria: 'Terminar', pauseSim: 'Pausar la simulación', resumeSim: 'Reanudar la simulación',
+    menuTitle: 'Preferencias', closeMenu: 'Cerrar el menú',
+    sLang: 'Idioma', langLbl: 'Idioma de la app y de la voz', langNote: 'También cambia las frases de la guía por voz.',
+    sRoute: 'Ruta', routeType: 'Ruta sugerida primero', fast: 'Más rápida', short: 'Más corta', simple: 'Menos giros',
+    avoidHw: 'Evitar autopistas', avoidToll: 'Evitar peajes',
+    routeNote: 'Antes de salir ves hasta tres alternativas y eliges tú. El cálculo usa servidores gratuitos: si no admiten las exclusiones, la ruta se calcula sin ellas y se te avisa.',
+    sVehicle: 'Tu vehículo', aIcon: 'Icono del vehículo', iArrow: 'Flecha', iCar: 'Coche', iMoto: 'Moto', colorLbl: 'Color',
+    cYellow: 'Amarillo', cCyan: 'Azul', cFuchsia: 'Fucsia', cWhite: 'Blanco', cOrange: 'Naranja',
+    sVoice: 'Voz', vOn: 'Guía por voz', vTurn: 'Anunciar los giros', vCam: 'Avisar de los radares',
+    personaLbl: 'Estilo de las indicaciones', pClassic: 'Clásico', pCyber: 'Cyberpunk', pFun: 'Divertido', pRocker: 'Rockerboy', pHacker: 'Netrunner',
+    personaNote: 'Los estilos Cyberpunk, Divertido, Rockerboy y Netrunner están en italiano e inglés; en los demás idiomas se usa el Clásico.',
+    toneLbl: 'Tono de la voz', tNatural: 'Natural', tSoft: 'Más calmada', voiceLbl: 'Voz', volLbl: 'Volumen', testVoice: 'Probar la voz',
+    voiceAuto: 'Automática (la mejor disponible)', voiceNat: ' · natural', voiceUse: 'Voz en uso: {0}', voiceNone: 'No hay voz para este idioma: se usa la predeterminada del dispositivo.',
+    voiceNA: 'La síntesis de voz no está disponible en este dispositivo.', refreshVoices: 'Actualizar la lista de voces', allLangs: 'Mostrar voces de todos los idiomas',
+    voiceCount: '{0} voces encontradas en el dispositivo.',
+    tipsSum: 'Cómo añadir o mejorar voces',
+    tip1: 'Las voces son las instaladas en el dispositivo: la app no puede descargarlas. Tras añadir una, pulsa "Actualizar la lista de voces".',
+    tip2: 'iPhone: Ajustes, Accesibilidad, Contenido hablado, Voces, elige el idioma y descarga una voz Mejorada o Premium.',
+    tip3: 'Android y radios Android: Ajustes, Sistema, Idiomas y entrada, Salida de texto a voz, Instalar datos de voz. En Chrome prueba "Google" en la lista.',
+    tip4: 'Edge en ordenador: elige una voz con "Online (Natural)" en el nombre.',
+    sMap: 'Mapa', camsShow: 'Mostrar los radares', gloss: 'Reflejos en los edificios', themeLbl: 'Color de los edificios', thFuchsia: 'Fucsia', thCyan: 'Cian', thAmber: 'Ámbar',
+    view2d: 'Vista desde arriba (2D)', tiltLbl: 'Inclinación de la vista',
+    sTraffic: 'Radares y tráfico', ttLbl: 'Clave de TomTom (opcional)', ttPh: 'Pega aquí tu clave',
+    ttNote: 'El tráfico en tiempo real no es gratis sin registrarse. Con una clave gratuita de TomTom (unas 2.500 solicitudes al día) las rutas tienen en cuenta el tráfico. La clave se queda solo en este dispositivo.',
+    ttLink: 'Obtener una clave gratuita', reportCam: 'Añadir un radar aquí', reportDone: 'Radar guardado en el dispositivo.', reportClear: 'Borrar mis radares',
+    reportCleared: 'Radares personales borrados.', reportNeedPos: 'Hace falta la posición para añadir un radar.', reportNote: 'Los radares que añades se quedan en tu dispositivo y no se comparten.',
+    sOther: 'Otros', wake: 'Mantener la pantalla encendida al navegar', unitsLbl: 'Unidades', kmUnit: 'Kilómetros', miUnit: 'Millas',
+    simLbl: 'Velocidad de la simulación', reset: 'Restablecer los ajustes iniciales',
+    sInfo: 'Información',
+    info1: 'Mapas, calles y edificios: datos © colaboradores de OpenStreetMap, teselas de OpenFreeMap (© OpenMapTiles). Radares y límites: OpenStreetMap mediante Overpass. Rutas: OSRM (y TomTom si añades la clave). Búsqueda de direcciones: Photon y Nominatim.',
+    info2: 'Sin clave de TomTom, las duraciones son estimaciones sin tráfico.',
+    info3: 'Los avisos se refieren a los radares fijos marcados en OpenStreetMap y a los que añades tú. Pueden faltar, haber cambiado o no estar activos. Respeta siempre los límites y la señalización.',
+    info4: 'Para buscar y calcular rutas, tu posición y los destinos se envían a los servicios indicados.', diagSum: 'Diagnóstico de carga', diagNone: 'Aún no hay solicitudes de red (mapa desde la caché o en espera).',
+    searching: 'Buscando…', noResults: 'Sin resultados. Prueba con dirección y ciudad.', needPos: 'Hace falta la posición. Activa el GPS o usa la ubicación de ejemplo.',
+    calcRoute: 'Calculando las rutas…', noRoute: 'No se ha encontrado ruta a este destino.', srvDown: 'Servidor de rutas inaccesible. Inténtalo de nuevo en breve.',
+    dropped: 'El servidor no admite las exclusiones elegidas: ruta calculada sin ellas. ', noTraffic: 'Duración estimada sin tráfico.', withTraffic: 'Duración con el tráfico actual.',
+    arrivedT: 'Has llegado', reached: 'Has llegado a {0}.', onSt: 'Por {0}', rerouteToast: 'Recalculando la ruta…', rerouteFail: 'No puedo recalcular: servidor inaccesible.',
+    gpsSim: 'simulado', gpsExample: 'de ejemplo', gpsWaiting: 'esperando', gpsDeniedS: 'denegado', gpsNA: 'no disponible',
+    gpsFound: 'Posición encontrada ({0}). Escribe a dónde quieres ir.', gpsUsingExample: 'Usando una posición de ejemplo en Milán.', gpsDenied: 'Ubicación denegada. Actívala en los ajustes del navegador para este sitio.',
+    gpsNoSupport: 'Este navegador no ofrece la ubicación.', gpsWaitLine: 'Esperando el GPS…',
+    camHud: 'Radar fijo en', limitWord: 'límite', limitAria: 'Límite de velocidad {0}', limitUnknown: 'Límite desconocido',
+    searchPos: 'Buscando tu posición…', loadMap: 'Cargando el mapa…', mapLoading: 'cargando {0}/{1}', mapNoNet: 'sin red', mapOk: 'ok',
+    chooseRoute: 'Elige la ruta', altFast: 'Más rápida', altShort: 'Más corta', altSimple: 'Menos giros', altNoHw: 'Sin autopistas', altOther: 'Alternativa', altTurns: '{0} giros',
+    altSame: 'como la más rápida', altPlus: '+{0}', altMinus: '−{0}', altTraffic: '{0} de retraso', altRoute: 'Ruta {0}',
+    min: 'min', hour: 'h', testPhrase: 'Hola, soy tu voz de a bordo. En trescientos metros, gire a la derecha.',
+    worldHint: 'Pellizca para volver al detalle', routeCamsNote: 'Radares en la ruta: {0}'
+  };
+  L.ui.fr = {
+    aMap: 'Carte de style néon avec l\'itinéraire en bleu', phQ: 'Où voulez-vous aller ?', aSearch: 'Recherche de destination',
+    gpsWait: 'En attente du GPS…', demoBtn: 'Essayer avec une position d\'exemple (Milan)', aTurn: 'Prochaine manœuvre',
+    go: 'Démarrer', sim: 'Essayer sans bouger', cancel: 'Annuler', aPreview: 'Résumé de l\'itinéraire', aStats: 'Vitesse et arrivée',
+    aLimit: 'Limite de vitesse', lGps: 'GPS', lMap: 'Carte', lArr: 'Arrivée', lLeft: 'Reste', lDist: 'Distance',
+    zIn: 'Zoomer', zOut: 'Dézoomer', to2d: 'Passer en vue 2D', to3d: 'Passer en vue 3D', recenter: 'Revenir à ma position',
+    menuAria: 'Menu et préférences', endAria: 'Terminer', pauseSim: 'Mettre la simulation en pause', resumeSim: 'Reprendre la simulation',
+    menuTitle: 'Préférences', closeMenu: 'Fermer le menu',
+    sLang: 'Langue', langLbl: 'Langue de l\'app et de la voix', langNote: 'Cela change aussi les phrases du guidage vocal.',
+    sRoute: 'Itinéraire', routeType: 'Itinéraire proposé en premier', fast: 'Le plus rapide', short: 'Le plus court', simple: 'Moins de virages',
+    avoidHw: 'Éviter les autoroutes', avoidToll: 'Éviter les péages',
+    routeNote: 'Avant de partir vous voyez jusqu\'à trois alternatives et vous choisissez. Le calcul utilise des serveurs gratuits : s\'ils ne gèrent pas les exclusions, l\'itinéraire est calculé sans elles et vous êtes prévenu.',
+    sVehicle: 'Votre véhicule', aIcon: 'Icône du véhicule', iArrow: 'Flèche', iCar: 'Voiture', iMoto: 'Moto', colorLbl: 'Couleur',
+    cYellow: 'Jaune', cCyan: 'Bleu clair', cFuchsia: 'Fuchsia', cWhite: 'Blanc', cOrange: 'Orange',
+    sVoice: 'Voix', vOn: 'Guidage vocal', vTurn: 'Annoncer les virages', vCam: 'Avertir des radars',
+    personaLbl: 'Style des indications', pClassic: 'Classique', pCyber: 'Cyberpunk', pFun: 'Amusant', pRocker: 'Rockerboy', pHacker: 'Netrunner',
+    personaNote: 'Les styles Cyberpunk, Amusant, Rockerboy et Netrunner existent en italien et en anglais ; les autres langues utilisent le Classique.',
+    toneLbl: 'Ton de la voix', tNatural: 'Naturel', tSoft: 'Plus calme', voiceLbl: 'Voix', volLbl: 'Volume', testVoice: 'Tester la voix',
+    voiceAuto: 'Automatique (la meilleure disponible)', voiceNat: ' · naturelle', voiceUse: 'Voix utilisée : {0}', voiceNone: 'Aucune voix pour cette langue : la voix par défaut de l\'appareil est utilisée.',
+    voiceNA: 'La synthèse vocale n\'est pas disponible sur cet appareil.', refreshVoices: 'Actualiser la liste des voix', allLangs: 'Afficher les voix de toutes les langues',
+    voiceCount: '{0} voix trouvées sur l\'appareil.',
+    tipsSum: 'Comment ajouter ou améliorer les voix',
+    tip1: 'Les voix sont celles installées sur l\'appareil : l\'app ne peut pas en télécharger. Après en avoir ajouté une, touchez « Actualiser la liste des voix ».',
+    tip2: 'iPhone : Réglages, Accessibilité, Contenu énoncé, Voix, choisissez la langue et téléchargez une voix Améliorée ou Premium.',
+    tip3: 'Android et autoradios Android : Paramètres, Système, Langues et saisie, Synthèse vocale, Installer les données vocales. Dans Chrome essayez « Google » dans la liste.',
+    tip4: 'Edge sur ordinateur : choisissez une voix avec « Online (Natural) » dans le nom.',
+    sMap: 'Carte', camsShow: 'Afficher les radars', gloss: 'Reflets sur les bâtiments', themeLbl: 'Couleur des bâtiments', thFuchsia: 'Fuchsia', thCyan: 'Cyan', thAmber: 'Ambre',
+    view2d: 'Vue du dessus (2D)', tiltLbl: 'Inclinaison de la vue',
+    sTraffic: 'Radars et trafic', ttLbl: 'Clé TomTom (facultative)', ttPh: 'Collez votre clé ici',
+    ttNote: 'Le trafic en temps réel n\'est pas gratuit sans inscription. Avec une clé TomTom gratuite (environ 2 500 requêtes par jour) les itinéraires tiennent compte du trafic. La clé reste uniquement sur cet appareil.',
+    ttLink: 'Obtenir une clé gratuite', reportCam: 'Ajouter un radar ici', reportDone: 'Radar enregistré sur l\'appareil.', reportClear: 'Supprimer mes radars',
+    reportCleared: 'Radars personnels supprimés.', reportNeedPos: 'La position est nécessaire pour ajouter un radar.', reportNote: 'Les radars que vous ajoutez restent sur votre appareil et ne sont pas partagés.',
+    sOther: 'Autres', wake: 'Garder l\'écran allumé pendant la navigation', unitsLbl: 'Unités', kmUnit: 'Kilomètres', miUnit: 'Miles',
+    simLbl: 'Vitesse de la simulation', reset: 'Rétablir les réglages initiaux',
+    sInfo: 'Informations',
+    info1: 'Cartes, routes et bâtiments : données © contributeurs d\'OpenStreetMap, tuiles d\'OpenFreeMap (© OpenMapTiles). Radars et limites : OpenStreetMap via Overpass. Itinéraires : OSRM (et TomTom si vous ajoutez la clé). Recherche d\'adresses : Photon et Nominatim.',
+    info2: 'Sans clé TomTom, les durées sont des estimations sans trafic.',
+    info3: 'Les alertes concernent les radars fixes signalés sur OpenStreetMap et ceux que vous ajoutez. Ils peuvent manquer, avoir changé ou ne plus être actifs. Respectez toujours les limitations et la signalisation.',
+    info4: 'Pour chercher et calculer les itinéraires, votre position et vos destinations sont envoyées aux services ci-dessus.', diagSum: 'Diagnostic du chargement', diagNone: 'Aucune requête réseau pour l\'instant (carte depuis le cache ou en attente).',
+    searching: 'Recherche…', noResults: 'Aucun résultat. Essayez une adresse et une ville.', needPos: 'La position est nécessaire. Activez le GPS ou utilisez la position d\'exemple.',
+    calcRoute: 'Calcul des itinéraires…', noRoute: 'Aucun itinéraire trouvé vers cette destination.', srvDown: 'Serveur d\'itinéraires injoignable. Réessayez dans un instant.',
+    dropped: 'Le serveur ne gère pas les exclusions choisies : itinéraire calculé sans elles. ', noTraffic: 'Durée estimée sans trafic.', withTraffic: 'Durée avec le trafic actuel.',
+    arrivedT: 'Vous êtes arrivé', reached: 'Vous avez atteint {0}.', onSt: 'Sur {0}', rerouteToast: 'Recalcul de l\'itinéraire…', rerouteFail: 'Impossible de recalculer : serveur injoignable.',
+    gpsSim: 'simulé', gpsExample: 'd\'exemple', gpsWaiting: 'en attente', gpsDeniedS: 'refusé', gpsNA: 'indisponible',
+    gpsFound: 'Position trouvée ({0}). Écrivez où vous voulez aller.', gpsUsingExample: 'Utilisation d\'une position d\'exemple à Milan.', gpsDenied: 'Localisation refusée. Activez-la dans les réglages du navigateur pour ce site.',
+    gpsNoSupport: 'Ce navigateur ne fournit pas la position.', gpsWaitLine: 'En attente du GPS…',
+    camHud: 'Radar fixe dans', limitWord: 'limite', limitAria: 'Limite de vitesse {0}', limitUnknown: 'Limite inconnue',
+    searchPos: 'Recherche de votre position…', loadMap: 'Chargement de la carte…', mapLoading: 'chargement {0}/{1}', mapNoNet: 'pas de réseau', mapOk: 'ok',
+    chooseRoute: 'Choisissez l\'itinéraire', altFast: 'Le plus rapide', altShort: 'Le plus court', altSimple: 'Moins de virages', altNoHw: 'Sans autoroutes', altOther: 'Alternatif', altTurns: '{0} virages',
+    altSame: 'comme le plus rapide', altPlus: '+{0}', altMinus: '−{0}', altTraffic: '{0} de retard', altRoute: 'Itinéraire {0}',
+    min: 'min', hour: 'h', testPhrase: 'Bonjour, je suis votre voix de bord. Dans trois cents mètres, tournez à droite.',
+    worldHint: 'Pincez pour revenir aux détails', routeCamsNote: 'Radars sur l\'itinéraire : {0}'
+  };
+  L.ui.de = {
+    aMap: 'Neon-Karte mit der Route in Blau', phQ: 'Wohin möchtest du?', aSearch: 'Zielsuche',
+    gpsWait: 'Warte auf GPS…', demoBtn: 'Beispielstandort ausprobieren (Mailand)', aTurn: 'Nächstes Manöver',
+    go: 'Starten', sim: 'Testen ohne Fahren', cancel: 'Abbrechen', aPreview: 'Routenübersicht', aStats: 'Geschwindigkeit und Ankunft',
+    aLimit: 'Tempolimit', lGps: 'GPS', lMap: 'Karte', lArr: 'Ankunft', lLeft: 'Rest', lDist: 'Strecke',
+    zIn: 'Karte vergrößern', zOut: 'Karte verkleinern', to2d: 'Zur 2D-Ansicht wechseln', to3d: 'Zur 3D-Ansicht wechseln', recenter: 'Zurück zu meiner Position',
+    menuAria: 'Menü und Einstellungen', endAria: 'Beenden', pauseSim: 'Simulation pausieren', resumeSim: 'Simulation fortsetzen',
+    menuTitle: 'Einstellungen', closeMenu: 'Menü schließen',
+    sLang: 'Sprache', langLbl: 'Sprache der App und der Stimme', langNote: 'Ändert auch die Sätze der Sprachführung.',
+    sRoute: 'Route', routeType: 'Zuerst vorgeschlagene Route', fast: 'Schnellste', short: 'Kürzeste', simple: 'Wenigste Abbiegungen',
+    avoidHw: 'Autobahnen meiden', avoidToll: 'Mautstraßen meiden',
+    routeNote: 'Vor der Fahrt siehst du bis zu drei Alternativen und wählst selbst. Die Berechnung nutzt kostenlose Server: Unterstützen sie die Ausschlüsse nicht, wird ohne sie berechnet und du wirst informiert.',
+    sVehicle: 'Dein Fahrzeug', aIcon: 'Fahrzeugsymbol', iArrow: 'Pfeil', iCar: 'Auto', iMoto: 'Motorrad', colorLbl: 'Farbe',
+    cYellow: 'Gelb', cCyan: 'Hellblau', cFuchsia: 'Fuchsia', cWhite: 'Weiß', cOrange: 'Orange',
+    sVoice: 'Stimme', vOn: 'Sprachführung', vTurn: 'Abbiegungen ansagen', vCam: 'Vor Blitzern warnen',
+    personaLbl: 'Stil der Ansagen', pClassic: 'Klassisch', pCyber: 'Cyberpunk', pFun: 'Lustig', pRocker: 'Rockerboy', pHacker: 'Netrunner',
+    personaNote: 'Die Stile Cyberpunk, Lustig, Rockerboy und Netrunner gibt es auf Italienisch und Englisch; andere Sprachen nutzen Klassisch.',
+    toneLbl: 'Stimmton', tNatural: 'Natürlich', tSoft: 'Ruhiger', voiceLbl: 'Stimme', volLbl: 'Lautstärke', testVoice: 'Stimme testen',
+    voiceAuto: 'Automatisch (die beste verfügbare)', voiceNat: ' · natürlich', voiceUse: 'Verwendete Stimme: {0}', voiceNone: 'Keine Stimme für diese Sprache: Standardstimme des Geräts wird genutzt.',
+    voiceNA: 'Sprachausgabe ist auf diesem Gerät nicht verfügbar.', refreshVoices: 'Stimmenliste aktualisieren', allLangs: 'Stimmen aller Sprachen anzeigen',
+    voiceCount: '{0} Stimmen auf dem Gerät gefunden.',
+    tipsSum: 'Stimmen hinzufügen oder verbessern',
+    tip1: 'Es gibt nur die auf dem Gerät installierten Stimmen: Die App kann keine herunterladen. Nach dem Hinzufügen tippe auf „Stimmenliste aktualisieren“.',
+    tip2: 'iPhone: Einstellungen, Bedienungshilfen, Gesprochene Inhalte, Stimmen, Sprache wählen und eine erweiterte oder Premium-Stimme laden.',
+    tip3: 'Android und Android-Autoradios: Einstellungen, System, Sprachen & Eingabe, Text-in-Sprache-Ausgabe, Sprachdaten installieren. In Chrome „Google“ in der Liste probieren.',
+    tip4: 'Edge am Computer: eine Stimme mit „Online (Natural)“ im Namen wählen.',
+    sMap: 'Karte', camsShow: 'Blitzer anzeigen', gloss: 'Spiegelungen an Gebäuden', themeLbl: 'Gebäudefarbe', thFuchsia: 'Fuchsia', thCyan: 'Cyan', thAmber: 'Bernstein',
+    view2d: 'Ansicht von oben (2D)', tiltLbl: 'Neigung der Ansicht',
+    sTraffic: 'Blitzer und Verkehr', ttLbl: 'TomTom-Schlüssel (optional)', ttPh: 'Schlüssel hier einfügen',
+    ttNote: 'Echtzeit-Verkehr gibt es nicht kostenlos ohne Registrierung. Mit einem kostenlosen TomTom-Schlüssel (etwa 2.500 Anfragen pro Tag) berücksichtigen Routen den Verkehr. Der Schlüssel bleibt nur auf diesem Gerät.',
+    ttLink: 'Kostenlosen Schlüssel holen', reportCam: 'Blitzer hier hinzufügen', reportDone: 'Blitzer auf dem Gerät gespeichert.', reportClear: 'Meine Blitzer löschen',
+    reportCleared: 'Eigene Blitzer gelöscht.', reportNeedPos: 'Zum Hinzufügen eines Blitzers wird die Position benötigt.', reportNote: 'Von dir hinzugefügte Blitzer bleiben auf deinem Gerät und werden nicht geteilt.',
+    sOther: 'Sonstiges', wake: 'Bildschirm bei der Navigation anlassen', unitsLbl: 'Einheiten', kmUnit: 'Kilometer', miUnit: 'Meilen',
+    simLbl: 'Simulationsgeschwindigkeit', reset: 'Standardeinstellungen wiederherstellen',
+    sInfo: 'Info',
+    info1: 'Karten, Straßen und Gebäude: Daten © OpenStreetMap-Mitwirkende, Kacheln von OpenFreeMap (© OpenMapTiles). Blitzer und Limits: OpenStreetMap über Overpass. Routen: OSRM (und TomTom, wenn du einen Schlüssel einträgst). Adresssuche: Photon und Nominatim.',
+    info2: 'Ohne TomTom-Schlüssel sind die Fahrzeiten Schätzungen ohne Verkehr.',
+    info3: 'Die Warnungen betreffen feste Blitzer, die auf OpenStreetMap eingetragen sind, und die, die du hinzufügst. Sie können fehlen, geändert oder nicht mehr aktiv sein. Beachte immer Limits und Beschilderung.',
+    info4: 'Für Suche und Routenberechnung werden deine Position und Ziele an die oben genannten Dienste gesendet.', diagSum: 'Ladediagnose', diagNone: 'Noch keine Netzwerkanfragen (Karte aus dem Cache oder wartend).',
+    searching: 'Suche…', noResults: 'Keine Ergebnisse. Versuche Adresse und Stadt.', needPos: 'Position nötig. GPS einschalten oder Beispielstandort nutzen.',
+    calcRoute: 'Routen werden berechnet…', noRoute: 'Keine Route zu diesem Ziel gefunden.', srvDown: 'Routenserver nicht erreichbar. Gleich noch einmal versuchen.',
+    dropped: 'Der Server unterstützt die gewählten Ausschlüsse nicht: Route ohne sie berechnet. ', noTraffic: 'Geschätzte Dauer ohne Verkehr.', withTraffic: 'Dauer mit aktuellem Verkehr.',
+    arrivedT: 'Du bist angekommen', reached: 'Du hast {0} erreicht.', onSt: 'Auf {0}', rerouteToast: 'Route wird neu berechnet…', rerouteFail: 'Neuberechnung nicht möglich: Server nicht erreichbar.',
+    gpsSim: 'simuliert', gpsExample: 'Beispiel', gpsWaiting: 'wartet', gpsDeniedS: 'verweigert', gpsNA: 'nicht verfügbar',
+    gpsFound: 'Position gefunden ({0}). Gib ein, wohin du möchtest.', gpsUsingExample: 'Beispielposition in Mailand wird verwendet.', gpsDenied: 'Standort verweigert. Aktiviere ihn in den Browsereinstellungen für diese Seite.',
+    gpsNoSupport: 'Dieser Browser liefert keinen Standort.', gpsWaitLine: 'Warte auf GPS…',
+    camHud: 'Fester Blitzer in', limitWord: 'Limit', limitAria: 'Tempolimit {0}', limitUnknown: 'Limit unbekannt',
+    searchPos: 'Suche deine Position…', loadMap: 'Karte wird geladen…', mapLoading: 'lädt {0}/{1}', mapNoNet: 'kein Netz', mapOk: 'ok',
+    chooseRoute: 'Route wählen', altFast: 'Schnellste', altShort: 'Kürzeste', altSimple: 'Wenigste Abbiegungen', altNoHw: 'Ohne Autobahn', altOther: 'Alternative', altTurns: '{0} Abbiegungen',
+    altSame: 'wie die schnellste', altPlus: '+{0}', altMinus: '−{0}', altTraffic: '{0} Verzögerung', altRoute: 'Route {0}',
+    min: 'Min.', hour: 'Std.', testPhrase: 'Hallo, ich bin deine Bordstimme. In dreihundert Metern rechts abbiegen.',
+    worldHint: 'Zum Zurückzoomen zusammenziehen', routeCamsNote: 'Blitzer auf der Route: {0}'
+  };
+
+  /* ---------- Frasi di guida ---------- */
+  var P = L.ph = {};
+  P.classic = {};
+  P.classic.it = {
+    lead: 'Tra {d}, ', now: 'Ora ', tail: ' su {name}',
+    turn: { left: 'svolta a sinistra', right: 'svolta a destra', slightleft: 'svolta leggermente a sinistra', slightright: 'svolta leggermente a destra', sharpleft: 'svolta decisamente a sinistra', sharpright: 'svolta decisamente a destra', straight: 'prosegui dritto', uturn: 'fai inversione a U' },
+    round: 'alla rotonda, prendi la {n} uscita', roundX: 'alla rotonda, segui le indicazioni',
+    ord: ['prima', 'seconda', 'terza', 'quarta', 'quinta', 'sesta', 'settima', 'ottava'],
+    fork: { left: 'al bivio, tieni la sinistra', right: 'al bivio, tieni la destra', x: 'al bivio, prosegui dritto' },
+    merge: { left: 'immettiti a sinistra', right: 'immettiti a destra', x: 'immettiti' },
+    onramp: { left: 'prendi la rampa a sinistra', right: 'prendi la rampa a destra', x: 'prendi la rampa' },
+    offramp: { left: 'prendi l\'uscita a sinistra', right: 'prendi l\'uscita a destra', x: 'prendi l\'uscita' },
+    endroad: { left: 'alla fine della strada, svolta a sinistra', right: 'alla fine della strada, svolta a destra', x: 'alla fine della strada, svolta' },
+    arrive: { left: 'la destinazione è sulla sinistra', right: 'la destinazione è sulla destra', x: 'arrivo a destinazione' },
+    arriveNow: 'Sei arrivato a destinazione.', start: 'Si parte. ', cam: 'Attenzione, autovelox fisso tra {d}.', camLimit: ' Limite {l}.',
+    reroute: 'Ricalcolo del percorso.', arrived: 'Sei arrivato a destinazione.'
+  };
+  P.classic.en = {
+    lead: 'In {d}, ', now: 'Now ', tail: ' onto {name}',
+    turn: { left: 'turn left', right: 'turn right', slightleft: 'bear slightly left', slightright: 'bear slightly right', sharpleft: 'turn sharply left', sharpright: 'turn sharply right', straight: 'continue straight', uturn: 'make a U-turn' },
+    round: 'at the roundabout, take the {n} exit', roundX: 'at the roundabout, follow the signs',
+    ord: ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'],
+    fork: { left: 'at the fork, keep left', right: 'at the fork, keep right', x: 'at the fork, continue straight' },
+    merge: { left: 'merge left', right: 'merge right', x: 'merge' },
+    onramp: { left: 'take the ramp on the left', right: 'take the ramp on the right', x: 'take the ramp' },
+    offramp: { left: 'take the exit on the left', right: 'take the exit on the right', x: 'take the exit' },
+    endroad: { left: 'at the end of the road, turn left', right: 'at the end of the road, turn right', x: 'at the end of the road, turn' },
+    arrive: { left: 'your destination is on the left', right: 'your destination is on the right', x: 'arriving at your destination' },
+    arriveNow: 'You have arrived at your destination.', start: 'Let\'s go. ', cam: 'Caution, fixed speed camera in {d}.', camLimit: ' Limit {l}.',
+    reroute: 'Recalculating the route.', arrived: 'You have arrived at your destination.'
+  };
+  P.classic.es = {
+    lead: 'En {d}, ', now: 'Ahora ', tail: ' por {name}',
+    turn: { left: 'gire a la izquierda', right: 'gire a la derecha', slightleft: 'gire ligeramente a la izquierda', slightright: 'gire ligeramente a la derecha', sharpleft: 'gire bruscamente a la izquierda', sharpright: 'gire bruscamente a la derecha', straight: 'continúe recto', uturn: 'haga un cambio de sentido' },
+    round: 'en la rotonda, tome la {n} salida', roundX: 'en la rotonda, siga las indicaciones',
+    ord: ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava'],
+    fork: { left: 'en la bifurcación, mantenga la izquierda', right: 'en la bifurcación, mantenga la derecha', x: 'en la bifurcación, continúe recto' },
+    merge: { left: 'incorpórese por la izquierda', right: 'incorpórese por la derecha', x: 'incorpórese' },
+    onramp: { left: 'tome el ramal de la izquierda', right: 'tome el ramal de la derecha', x: 'tome el ramal' },
+    offramp: { left: 'tome la salida de la izquierda', right: 'tome la salida de la derecha', x: 'tome la salida' },
+    endroad: { left: 'al final de la calle, gire a la izquierda', right: 'al final de la calle, gire a la derecha', x: 'al final de la calle, gire' },
+    arrive: { left: 'su destino está a la izquierda', right: 'su destino está a la derecha', x: 'llegada a su destino' },
+    arriveNow: 'Ha llegado a su destino.', start: 'Nos ponemos en marcha. ', cam: 'Atención, radar fijo en {d}.', camLimit: ' Límite {l}.',
+    reroute: 'Recalculando la ruta.', arrived: 'Ha llegado a su destino.'
+  };
+  P.classic.fr = {
+    lead: 'Dans {d}, ', now: 'Maintenant, ', tail: ' sur {name}',
+    turn: { left: 'tournez à gauche', right: 'tournez à droite', slightleft: 'tournez légèrement à gauche', slightright: 'tournez légèrement à droite', sharpleft: 'tournez franchement à gauche', sharpright: 'tournez franchement à droite', straight: 'continuez tout droit', uturn: 'faites demi-tour' },
+    round: 'au rond-point, prenez la {n} sortie', roundX: 'au rond-point, suivez les indications',
+    ord: ['première', 'deuxième', 'troisième', 'quatrième', 'cinquième', 'sixième', 'septième', 'huitième'],
+    fork: { left: 'à la bifurcation, restez à gauche', right: 'à la bifurcation, restez à droite', x: 'à la bifurcation, continuez tout droit' },
+    merge: { left: 'insérez-vous à gauche', right: 'insérez-vous à droite', x: 'insérez-vous' },
+    onramp: { left: 'prenez la bretelle à gauche', right: 'prenez la bretelle à droite', x: 'prenez la bretelle' },
+    offramp: { left: 'prenez la sortie à gauche', right: 'prenez la sortie à droite', x: 'prenez la sortie' },
+    endroad: { left: 'au bout de la route, tournez à gauche', right: 'au bout de la route, tournez à droite', x: 'au bout de la route, tournez' },
+    arrive: { left: 'votre destination est à gauche', right: 'votre destination est à droite', x: 'arrivée à destination' },
+    arriveNow: 'Vous êtes arrivé à destination.', start: 'On y va. ', cam: 'Attention, radar fixe dans {d}.', camLimit: ' Limite {l}.',
+    reroute: 'Recalcul de l\'itinéraire.', arrived: 'Vous êtes arrivé à destination.'
+  };
+  P.classic.de = {
+    lead: 'In {d} ', now: 'Jetzt ', tail: ' auf {name}',
+    turn: { left: 'links abbiegen', right: 'rechts abbiegen', slightleft: 'leicht links abbiegen', slightright: 'leicht rechts abbiegen', sharpleft: 'scharf links abbiegen', sharpright: 'scharf rechts abbiegen', straight: 'geradeaus weiterfahren', uturn: 'wenden' },
+    round: 'im Kreisverkehr die {n} Ausfahrt nehmen', roundX: 'im Kreisverkehr den Hinweisen folgen',
+    ord: ['erste', 'zweite', 'dritte', 'vierte', 'fünfte', 'sechste', 'siebte', 'achte'],
+    fork: { left: 'an der Gabelung links halten', right: 'an der Gabelung rechts halten', x: 'an der Gabelung geradeaus weiterfahren' },
+    merge: { left: 'links einfädeln', right: 'rechts einfädeln', x: 'einfädeln' },
+    onramp: { left: 'links auf die Auffahrt fahren', right: 'rechts auf die Auffahrt fahren', x: 'auf die Auffahrt fahren' },
+    offramp: { left: 'links die Ausfahrt nehmen', right: 'rechts die Ausfahrt nehmen', x: 'die Ausfahrt nehmen' },
+    endroad: { left: 'am Ende der Straße links abbiegen', right: 'am Ende der Straße rechts abbiegen', x: 'am Ende der Straße abbiegen' },
+    arrive: { left: 'Ihr Ziel befindet sich links', right: 'Ihr Ziel befindet sich rechts', x: 'Ankunft am Ziel' },
+    arriveNow: 'Sie haben Ihr Ziel erreicht.', start: 'Es geht los. ', cam: 'Achtung, fester Blitzer in {d}.', camLimit: ' Tempolimit {l}.',
+    reroute: 'Route wird neu berechnet.', arrived: 'Sie haben Ihr Ziel erreicht.'
+  };
+
+  /* Stili con personalità: più varianti per frase, scelte in modo stabile. Le chiavi mancanti ricadono sul Classico. */
+  P.cyber = {
+    it: {
+      lead: ['Tra {d}, ', 'Fra {d}, '], now: ['Adesso ', 'Ora, '],
+      turn: {
+        left: ['vira a sinistra nel neon', 'sinistra, senza esitare', 'svolta a sinistra e tieni la linea'],
+        right: ['vira a destra nel neon', 'destra, senza esitare', 'svolta a destra e tieni la linea'],
+        slightleft: ['scivola leggermente a sinistra', 'accenna a sinistra, morbido'], slightright: ['scivola leggermente a destra', 'accenna a destra, morbido'],
+        sharpleft: ['curva stretta a sinistra, tieni duro', 'sinistra secca, stringi il volante'], sharpright: ['curva stretta a destra, tieni duro', 'destra secca, stringi il volante'],
+        straight: ['tira dritto e tieni la linea', 'prosegui dritto nel flusso'], uturn: ['inversione a U: ricalibra e riparti', 'inversione a U, la rete ti segue']
+      },
+      round: ['alla rotonda, imbocca la {n} uscita'], roundX: ['alla rotonda, segui il segnale'],
+      arrive: { left: ['destinazione sul lato sinistro, fine della corsa'], right: ['destinazione sul lato destro, fine della corsa'], x: ['destinazione in vista'] },
+      arriveNow: ['Destinazione raggiunta. Disconnessione.'], start: ['Sistema online. Si parte. ', 'Link stabilito. Si parte. '],
+      cam: ['Allarme: occhio elettronico fisso tra {d}.', 'Sensore fisso rilevato tra {d}.'], camLimit: [' Limite {l}: resta nel flusso legale.', ' Limite {l}.'],
+      reroute: ['Rotta persa. Ricalcolo nella rete.', 'Ricalcolo la rotta, un attimo.'], arrived: ['Destinazione raggiunta. Disconnessione.', 'Sei arrivato. Spegni i motori, la notte può aspettare.']
+    },
+    en: {
+      lead: ['In {d}, '], now: ['Now ', 'Right now, '],
+      turn: {
+        left: ['veer left into the neon', 'left, no hesitation', 'turn left and hold your line'],
+        right: ['veer right into the neon', 'right, no hesitation', 'turn right and hold your line'],
+        slightleft: ['drift slightly left', 'ease left, smooth'], slightright: ['drift slightly right', 'ease right, smooth'],
+        sharpleft: ['tight left, hold on', 'hard left, grip the wheel'], sharpright: ['tight right, hold on', 'hard right, grip the wheel'],
+        straight: ['go straight and hold your line', 'stay straight in the flow'], uturn: ['U-turn: recalibrate and go', 'make a U-turn, the grid follows you']
+      },
+      round: ['at the roundabout, take the {n} exit'], roundX: ['at the roundabout, follow the signal'],
+      arrive: { left: ['destination on your left, end of the run'], right: ['destination on your right, end of the run'], x: ['destination in sight'] },
+      arriveNow: ['Destination reached. Disconnecting.'], start: ['System online. Let\'s roll. ', 'Link established. Let\'s roll. '],
+      cam: ['Alert: fixed electronic eye in {d}.', 'Fixed sensor detected in {d}.'], camLimit: [' Limit {l}: stay in the legal flow.', ' Limit {l}.'],
+      reroute: ['Route lost. Recalculating through the grid.', 'Recalculating the route, one moment.'], arrived: ['Destination reached. Disconnecting.', 'You made it. Kill the engine, the night can wait.']
+    }
+  };
+  P.fun = {
+    it: {
+      lead: ['Tra {d}, ', 'Fra {d}, '], now: ['Ecco, ', 'Adesso '],
+      turn: {
+        left: ['gira a sinistra, quella del cuore', 'sinistra! E fai finta di averlo deciso tu', 'svolta a sinistra, con eleganza'],
+        right: ['gira a destra, quella dei buoni', 'destra! E fai finta di averlo deciso tu', 'svolta a destra, con eleganza'],
+        slightleft: ['sfiora la sinistra, come una carezza'], slightright: ['sfiora la destra, come una carezza'],
+        sharpleft: ['sinistra stretta, tieni il caffè fermo'], sharpright: ['destra stretta, tieni il caffè fermo'],
+        straight: ['vai dritto, per una volta è facile', 'dritto, niente di cui preoccuparsi'], uturn: ['inversione a U, nessuno ti ha visto', 'fai inversione, i migliori cambiano idea']
+      },
+      round: ['alla rotonda, esci dalla {n} uscita, giro di giostra'], roundX: ['alla rotonda, segui le frecce e divertiti'],
+      arrive: { left: ['la meta è a sinistra, eccola!'], right: ['la meta è a destra, eccola!'], x: ['ci siamo quasi, il traguardo è vicino'] },
+      arriveNow: ['Ce l\'abbiamo fatta! Destinazione raggiunta, applausi.'], start: ['Allacciate le cinture, si parte. ', 'Si parte, e senza litigare. '],
+      cam: ['Attenzione, c\'è un fotografo fisso tra {d}. Sorridi, ma piano.', 'Autovelox fisso tra {d}: posa elegante, piede leggero.'], camLimit: [' Limite {l}.', ' Limite {l}, giusto per sicurezza.'],
+      reroute: ['Ops, nuova strada. Ricalcolo, niente panico.', 'Ricalcolo: anche i migliori sbagliano uscita.'], arrived: ['Ce l\'abbiamo fatta! Applausi.', 'Sei arrivato! Puoi smettere di fare finta di sapere la strada.']
+    },
+    en: {
+      lead: ['In {d}, '], now: ['Okay, ', 'Now '],
+      turn: {
+        left: ['go left, the heart side', 'left! And pretend it was your idea', 'turn left, with style'],
+        right: ['go right, the good side', 'right! And pretend it was your idea', 'turn right, with style'],
+        slightleft: ['brush to the left, like a gentle pat'], slightright: ['brush to the right, like a gentle pat'],
+        sharpleft: ['sharp left, hold your coffee'], sharpright: ['sharp right, hold your coffee'],
+        straight: ['straight ahead, for once it is easy', 'straight on, nothing to worry about'], uturn: ['U-turn, nobody saw that', 'turn around, the best people change their minds']
+      },
+      round: ['at the roundabout, take the {n} exit, merry-go-round time'], roundX: ['at the roundabout, follow the arrows and enjoy'],
+      arrive: { left: ['your goal is on the left, there it is!'], right: ['your goal is on the right, there it is!'], x: ['almost there, the finish line is close'] },
+      arriveNow: ['We made it! Destination reached, applause.'], start: ['Seat belts on, here we go. ', 'Off we go, no arguments. '],
+      cam: ['Heads up, a fixed photographer in {d}. Smile, but slowly.', 'Fixed speed camera in {d}: nice pose, light foot.'], camLimit: [' Limit {l}.', ' Limit {l}, just to be safe.'],
+      reroute: ['Oops, new road. Recalculating, no panic.', 'Recalculating: even the best miss an exit.'], arrived: ['We made it! Applause.', 'You have arrived! You can stop pretending you knew the way.']
+    }
+  };
+  P.rocker = {
+    it: {
+      lead: ['Tra {d}, ', 'Fra {d}, '], now: ['Adesso ', 'Ora, '],
+      turn: {
+        left: ['sterza a sinistra, come un assolo', 'sinistra! Più forte, ma guida piano'], right: ['sterza a destra, come un assolo', 'destra! Più forte, ma guida piano'],
+        slightleft: ['una spallata leggera a sinistra'], slightright: ['una spallata leggera a destra'],
+        sharpleft: ['curva stretta a sinistra, l\'amplificatore a palla'], sharpright: ['curva stretta a destra, l\'amplificatore a palla'],
+        straight: ['dritto, come un riff che non si ferma', 'tira dritto, il ritmo lo decidi tu'], uturn: ['inversione a U: il bis lo decidi tu', 'torna indietro, il palco può aspettare']
+      },
+      round: ['alla rotonda, esci alla {n}, il giro di basso'], roundX: ['alla rotonda, segui il ritmo'],
+      arrive: { left: ['il palco è a sinistra'], right: ['il palco è a destra'], x: ['il palco è qui davanti'] },
+      arriveNow: ['Sipario! Sei arrivato.'], start: ['Un due tre quattro. Si parte. ', 'Accordo di apertura, si parte. '],
+      cam: ['Occhio: autovelox fisso tra {d}. Il rock è rumoroso, la multa di più.', 'Autovelox fisso tra {d}: abbassa il volume del gas.'], camLimit: [' Limite {l}.'],
+      reroute: ['Cambio di scaletta. Ricalcolo.', 'Fuori tempo: ricalcolo la strada.'], arrived: ['Sipario! Sei arrivato, il pubblico ti aspetta.', 'Applausi, sei arrivato. Il resto è leggenda.']
+    },
+    en: {
+      lead: ['In {d}, '], now: ['Now ', 'Right now, '],
+      turn: {
+        left: ['steer left like a guitar solo', 'left! Louder, but drive easy'], right: ['steer right like a guitar solo', 'right! Louder, but drive easy'],
+        slightleft: ['a light shoulder to the left'], slightright: ['a light shoulder to the right'],
+        sharpleft: ['tight left, amp turned up'], sharpright: ['tight right, amp turned up'],
+        straight: ['straight on, like a riff that never stops', 'keep it straight, you set the tempo'], uturn: ['U-turn: you decide the encore', 'turn back, the stage can wait']
+      },
+      round: ['at the roundabout, take the {n} exit, bass line time'], roundX: ['at the roundabout, follow the rhythm'],
+      arrive: { left: ['the stage is on the left'], right: ['the stage is on the right'], x: ['the stage is right ahead'] },
+      arriveNow: ['Curtain up! You have arrived.'], start: ['One, two, three, four. Let\'s go. ', 'Opening chord, here we go. '],
+      cam: ['Heads up: fixed speed camera in {d}. Rock is loud, the fine is louder.', 'Fixed speed camera in {d}: ease off the gas.'], camLimit: [' Limit {l}.'],
+      reroute: ['Setlist change. Recalculating.', 'Off tempo: recalculating the route.'], arrived: ['Curtain up! You have arrived, the crowd is waiting.', 'Applause, you made it. The rest is legend.']
+    }
+  };
+  P.hacker = {
+    it: {
+      lead: ['Tra {d}, ', 'Fra {d}, '], now: ['Ora ', 'Immediato: '],
+      turn: {
+        left: ['esegui svolta a sinistra, latenza zero', 'sinistra: comando accettato'], right: ['esegui svolta a destra, latenza zero', 'destra: comando accettato'],
+        slightleft: ['correzione di traiettoria a sinistra, pochi gradi'], slightright: ['correzione di traiettoria a destra, pochi gradi'],
+        sharpleft: ['svolta stretta a sinistra, parametri critici'], sharpright: ['svolta stretta a destra, parametri critici'],
+        straight: ['mantieni la rotta, nessuna anomalia', 'prosegui dritto, segnale stabile'], uturn: ['inversione a U, ricarico il percorso', 'inversione: nuovo vettore in arrivo']
+      },
+      round: ['alla rotonda, imbocca l\'uscita numero {n}'], roundX: ['alla rotonda, segui il flusso dati'],
+      arrive: { left: ['bersaglio a sinistra, connessione imminente'], right: ['bersaglio a destra, connessione imminente'], x: ['punto di arrivo individuato'] },
+      arriveNow: ['Handshake completato: destinazione raggiunta.'], start: ['Connessione stabilita. Instradamento avviato. ', 'Accesso eseguito. Instradamento avviato. '],
+      cam: ['Rilevato nodo di sorveglianza fisso tra {d}.', 'Nodo di controllo velocità fisso tra {d}.'], camLimit: [' Limite {l}.'],
+      reroute: ['Percorso compromesso. Ricalcolo in corso.', 'Percorso non valido. Ricalcolo.'], arrived: ['Handshake completato: destinazione raggiunta.', 'Operazione conclusa. Sei arrivato.']
+    },
+    en: {
+      lead: ['In {d}, '], now: ['Now ', 'Immediate: '],
+      turn: {
+        left: ['execute left turn, zero latency', 'left: command accepted'], right: ['execute right turn, zero latency', 'right: command accepted'],
+        slightleft: ['trajectory correction to the left, a few degrees'], slightright: ['trajectory correction to the right, a few degrees'],
+        sharpleft: ['tight left turn, critical parameters'], sharpright: ['tight right turn, critical parameters'],
+        straight: ['hold course, no anomalies', 'continue straight, signal stable'], uturn: ['U-turn, reloading the route', 'U-turn: new vector incoming']
+      },
+      round: ['at the roundabout, take exit number {n}'], roundX: ['at the roundabout, follow the data flow'],
+      arrive: { left: ['target on the left, connection imminent'], right: ['target on the right, connection imminent'], x: ['arrival point located'] },
+      arriveNow: ['Handshake complete: destination reached.'], start: ['Connection established. Routing started. ', 'Logged in. Routing started. '],
+      cam: ['Fixed surveillance node detected in {d}.', 'Fixed speed-control node in {d}.'], camLimit: [' Limit {l}.'],
+      reroute: ['Route compromised. Recalculating.', 'Invalid route. Recalculating.'], arrived: ['Handshake complete: destination reached.', 'Operation complete. You have arrived.']
+    }
+  };
+  P.hacker.ordNote = 'numeri';
+  L.personas = ['classic', 'cyber', 'fun', 'rocker', 'hacker'];
+  window.NRL = L;
+})();

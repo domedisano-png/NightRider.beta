@@ -21,16 +21,22 @@ Alla prima apertura consenti l'accesso alla posizione. Se il GPS non c'è o lo r
 ## Come si usa
 
 1. Scrivi la destinazione nella barra di ricerca e scegli un risultato.
-2. Controlla durata e arrivo. "Avvia" parte con il GPS, "Prova senza muoverti" simula il percorso da fermo.
-3. Sulla mappa: trascina con un dito per spostarti, pizzica per lo zoom (con due dita puoi anche ruotare), oppure usa + e −. Il pulsante 2D/3D cambia la vista, il mirino riporta alla tua posizione (in guida ci torna da solo dopo 15 secondi).
-4. Durante la guida vedi la prossima svolta, gli avvisi autovelox, il limite e la velocità. Il menù in alto a destra contiene voce, mezzo, colori, unità e altro.
+2. Compaiono fino a tre percorsi (più veloce, più breve, meno svolte, senza autostrade): toccane uno per sceglierlo, la mappa li mostra con colori diversi. "Avvia" parte con il GPS, "Prova senza muoverti" simula il percorso da fermo.
+3. Sulla mappa: trascina con un dito, pizzica per lo zoom (con due dita puoi anche ruotare), oppure usa + e −. Se allontani ancora la vista si passa alla mappa del mondo e poi al globo intero; avvicinandoti si torna alla vista di guida. Il pulsante 2D/3D cambia la vista, il mirino riporta alla tua posizione.
+4. Durante la guida vedi la prossima svolta, gli avvisi autovelox, il limite e la velocità.
+5. Nel menù in alto a destra: lingua (italiano, inglese, spagnolo, francese, tedesco), stile delle indicazioni (Classico, Cyberpunk, Divertente, Rockerboy, Netrunner; gli stili sono in italiano e inglese), voce (puoi usare qualsiasi voce installata sul dispositivo: nuove voci si scaricano dalle impostazioni di iPhone o Android, poi tocca "Aggiorna voci"), segnala un autovelox nella tua posizione, chiave TomTom opzionale.
+
+## Traffico (opzionale)
+
+Il traffico in tempo reale non esiste con servizi del tutto gratuiti e senza chiave. In alternativa puoi creare un account gratuito su developer.tomtom.com, copiare la tua chiave API e incollarla nel menù. Senza chiave l'app funziona comunque, con durate senza traffico.
 
 ## Da dove arrivano i dati
 
 | Cosa | Servizio gratuito |
 | --- | --- |
 | Strade ed edifici | OpenStreetMap, tile vettoriali di OpenFreeMap |
-| Autovelox e limiti di velocità | OpenStreetMap, tramite Overpass API |
+| Autovelox e limiti di velocità | OpenStreetMap, tramite Overpass API (quattro server alternativi) |
+| Mappa del mondo e globo | Tile di OpenFreeMap |
 | Percorsi e indicazioni | OSRM (server pubblici) |
 | Ricerca indirizzi | Photon e Nominatim |
 
@@ -47,6 +53,6 @@ La posizione e le destinazioni vengono inviate a questi servizi per ottenere i d
 
 ## Per chi vuole modificarlo
 
-Non serve nessuna compilazione: sono file statici (`index.html`, `app.css`, `app.js`, `sw.js`, `manifest.webmanifest`). Per provarlo in locale avvia un server nella cartella, per esempio `python3 -m http.server 8000`, e apri `http://localhost:8000`. Il GPS funziona su `localhost` e su indirizzi `https`.
+Non serve nessuna compilazione: sono file statici (`index.html`, `app.css`, `app.js`, `lang.js`, `sw.js`, `manifest.webmanifest`). Per provarlo in locale avvia un server nella cartella, per esempio `python3 -m http.server 8000`, e apri `http://localhost:8000`. Il GPS funziona su `localhost` e su indirizzi `https`.
 
-Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v4`, poi `v5` e così via), così i telefoni scaricano la versione nuova.
+Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `v6` e così via), così i telefoni scaricano la versione nuova.

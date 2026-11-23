@@ -13,7 +13,7 @@
   var H_SCALE = 1.3;        // esagerazione dell'altezza degli edifici
   var CELL_DLAT = 0.004, CELL_DLON = 0.0055;   // celle di dati di circa 450 m
   var SIM_V = 13.9;         // 50 km/h in simulazione
-  var OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+  var OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://ovp.dresel.systems/api/interpreter'];
   var OSRM = ['https://router.project-osrm.org', 'https://routing.openstreetmap.de/routed-car'];
   var PHOTON = 'https://photon.komoot.io/api/';
   var NOMINATIM = 'https://nominatim.openstreetmap.org/search';
@@ -21,9 +21,9 @@
   var STORE_KEY = 'nightrider.app.prefs';
   var LAST_KEY = 'nightrider.app.last';
   var HW = {
-    motorway: [2, 14], trunk: [2, 13], primary: [1, 12], secondary: [1, 11], tertiary: [1, 10],
-    unclassified: [0, 8], residential: [0, 8], living_street: [0, 6], service: [0, 5],
-    motorway_link: [2, 8], trunk_link: [1, 8], primary_link: [1, 8], secondary_link: [1, 8], tertiary_link: [0, 8]
+    motorway: [2, 17], trunk: [2, 15], primary: [1, 14], secondary: [1, 12], tertiary: [1, 10],
+    unclassified: [0, 7], residential: [0, 6], living_street: [0, 5], service: [0, 3.5],
+    motorway_link: [2, 9], trunk_link: [1, 9], primary_link: [1, 9], secondary_link: [1, 8], tertiary_link: [0, 7]
   };
   var HW_RE = '^(' + Object.keys(HW).join('|') + ')$';
 
@@ -33,7 +33,7 @@
     bg: tok('--bg', '#07060d'), cyan: tok('--cyan', '#19e3ff'), mag: tok('--magenta', '#ff2e88'),
     yel: tok('--yellow', '#f7e733'), ok: tok('--ok', '#3ddc97'), panel: tok('--panel', '#110c20')
   };
-  var ROAD_MINOR = '#2a2050', ROAD_MAJOR = '#3a2c6e', ROAD_MOTORWAY = '#473582';
+  var ROAD_MINOR = '#271d4d', ROAD_MAJOR = '#4b3a94', ROAD_MOTORWAY = '#6d3fb8';
   var LX = -0.6, LY = -0.8;
 
   var THEMES = {
@@ -53,11 +53,13 @@
   function hsh(a, b) { var x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); }
 
   /* ---------- Preferenze ---------- */
+  function detectLang() { var n = String(navigator.language || 'it').slice(0, 2).toLowerCase(); return ['it', 'en', 'es', 'fr', 'de'].indexOf(n) >= 0 ? n : 'en'; }
   var DEFAULTS = {
     routeType: 'fast', avoidHighway: false, avoidToll: false,
     carIcon: 'arrow', carColor: '#f7e733',
     voice: true, voiceTurn: true, voiceCam: true, voiceName: '', voiceStyle: 'natural', volume: 0.9,
     cams: true, gloss: true, theme: 'fuchsia', tilt: 0.6, view2d: false,
+    lang: detectLang(), persona: 'cyber', voiceAll: false, ttKey: '',
     units: 'km', wake: true, simMult: 3
   };
   var prefs = {};
@@ -68,6 +70,29 @@
     if (saved && typeof saved === 'object') for (var sk in DEFAULTS) if (sk in saved && typeof saved[sk] === typeof DEFAULTS[sk]) prefs[sk] = saved[sk];
   } catch (e) {}
   function savePrefs() { try { localStorage.setItem(STORE_KEY, JSON.stringify(prefs)); } catch (e) {} }
+
+  /* ---------- Lingua ---------- */
+  var NRL = window.NRL;
+  function langInfo() { for (var i = 0; i < NRL.langs.length; i++) if (NRL.langs[i].id === prefs.lang) return NRL.langs[i]; return NRL.langs[0]; }
+  function t(key) {
+    var d = NRL.ui[prefs.lang] || NRL.ui.it, v = d[key];
+    if (v === undefined) v = NRL.ui.it[key];
+    if (v === undefined) v = key;
+    for (var i = 1; i < arguments.length; i++) v = v.split('{' + (i - 1) + '}').join(arguments[i]);
+    return v;
+  }
+  function fill(str, o) { for (var k in o) str = str.split('{' + k + '}').join(o[k]); return str; }
+  function applyLang() {
+    document.documentElement.lang = prefs.lang;
+    var n = document.querySelectorAll('[data-i18n]'), i, el;
+    for (i = 0; i < n.length; i++) { el = n[i]; el.textContent = t(el.getAttribute('data-i18n')); }
+    n = document.querySelectorAll('[data-i18n-aria]');
+    for (i = 0; i < n.length; i++) { el = n[i]; el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria'))); }
+    n = document.querySelectorAll('[data-i18n-ph]');
+    for (i = 0; i < n.length; i++) { el = n[i]; el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph'))); }
+    var title = $('endBtn'); if (title) title.title = t('endAria');
+    $('menuBtn').title = t('menuAria');
+  }
 
   /* ---------- Proiezione locale ---------- */
   var ORG = null;
@@ -82,29 +107,30 @@
   function fmtDist(m) {
     if (prefs.units === 'mi') {
       var mi = m / 1609.34;
-      if (mi >= 0.2) return mi.toFixed(1).replace('.', ',') + ' mi';
+      if (mi >= 0.2) return mi.toFixed(1).replace('.', (NRL.say[prefs.lang] || NRL.say.it).dec) + ' mi';
       var ft = m * 3.28084;
       return ft < 25 ? '0 ft' : Math.max(50, Math.round(ft / 50) * 50) + ' ft';
     }
-    if (m >= 995) return (m / 1000).toFixed(1).replace('.', ',') + ' km';
+    if (m >= 995) return (m / 1000).toFixed(1).replace('.', (NRL.say[prefs.lang] || NRL.say.it).dec) + ' km';
     return m < 5 ? '0 m' : Math.max(10, Math.round(m / 10) * 10) + ' m';
   }
   function spokenDist(m) {
+    var u = NRL.say[prefs.lang] || NRL.say.it, dec = u.dec;
     if (prefs.units === 'mi') {
       var mi = m / 1609.34;
-      if (mi >= 0.2) return mi.toFixed(1).replace('.', ',') + ' miglia';
-      return Math.max(50, Math.round(m * 3.28084 / 50) * 50) + ' piedi';
+      if (mi >= 0.2) return mi.toFixed(1).replace('.', dec) + ' ' + u.mi;
+      return Math.max(50, Math.round(m * 3.28084 / 50) * 50) + ' ' + u.ft;
     }
-    if (m >= 975) { var kmTxt = (m / 1000).toFixed(1); return kmTxt === '1.0' ? 'un chilometro' : kmTxt.replace('.', ',') + ' chilometri'; }
-    return Math.max(50, Math.round(m / 50) * 50) + ' metri';
+    if (m >= 975) { var kmTxt = (m / 1000).toFixed(1); return kmTxt === '1.0' ? u.oneKm : kmTxt.replace('.', dec) + ' ' + u.km; }
+    return Math.max(50, Math.round(m / 50) * 50) + ' ' + u.m;
   }
   function fmtDur(s) {
     var m = Math.max(1, Math.round(s / 60));
-    if (m < 60) return m + ' min';
+    if (m < 60) return m + ' ' + t('min');
     var h = Math.floor(m / 60);
-    return h + ' h ' + (m % 60 < 10 ? '0' : '') + (m % 60) + ' min';
+    return h + ' ' + t('hour') + ' ' + (m % 60 < 10 ? '0' : '') + (m % 60) + ' ' + t('min');
   }
-  function clockAfter(s) { return new Date(Date.now() + s * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); }
+  function clockAfter(s) { return new Date(Date.now() + s * 1000).toLocaleTimeString(langInfo().bcp, { hour: '2-digit', minute: '2-digit' }); }
 
   /* ---------- Rete ---------- */
   function fetchJson(url, init, ms) {
@@ -147,20 +173,26 @@
   function updateVoiceInfo() {
     var info = $('voiceInfo');
     if (!synth) { info.textContent = ''; return; }
-    var v = voices.filter(function (x) { return x.name === prefs.voiceName; })[0] || bestVoice();
-    info.textContent = v ? 'Voce in uso: ' + v.name + (isNatural(v) ? ' (naturale).' : '.') : 'Nessuna voce italiana trovata: uso quella predefinita del dispositivo.';
+    var v = voices.filter(function (x) { return x.name === prefs.voiceName; })[0] || bestVoice(), cnt = 0;
+    try { cnt = (synth.getVoices() || []).length; } catch (e) {}
+    info.textContent = (v ? t('voiceUse', v.name + (isNatural(v) ? t('voiceNat') : '')) : t('voiceNone')) + (cnt ? ' ' + t('voiceCount', cnt) : '');
   }
   function fillVoices() {
     if (!synth) return;
+    var pre = langInfo().id;
     try {
       var all = synth.getVoices() || [];
-      voices = all.filter(function (v) { return /^it/i.test(v.lang); });
-      voices.sort(function (a, b) { return voiceScore(b) - voiceScore(a); });
+      voices = all.filter(function (v) { return prefs.voiceAll || String(v.lang || '').toLowerCase().replace('_', '-').indexOf(pre) === 0; });
+      voices.sort(function (a, b) {
+        var la = String(a.lang || '').toLowerCase().indexOf(pre) === 0 ? 1 : 0, lb = String(b.lang || '').toLowerCase().indexOf(pre) === 0 ? 1 : 0;
+        return (lb - la) || (voiceScore(b) - voiceScore(a));
+      });
     } catch (e) { voices = []; }
     voiceSel.innerHTML = '';
-    var o = document.createElement('option'); o.value = ''; o.textContent = 'Automatica (la migliore disponibile)'; voiceSel.appendChild(o);
+    var o = document.createElement('option'); o.value = ''; o.textContent = t('voiceAuto'); voiceSel.appendChild(o);
     voices.forEach(function (v) {
-      var op = document.createElement('option'); op.value = v.name; op.textContent = v.name + (isNatural(v) ? ' · naturale' : ''); voiceSel.appendChild(op);
+      var op = document.createElement('option'); op.value = v.name;
+      op.textContent = v.name + (prefs.voiceAll ? ' (' + v.lang + ')' : '') + (isNatural(v) ? t('voiceNat') : ''); voiceSel.appendChild(op);
     });
     voiceSel.value = prefs.voiceName;
     if (voiceSel.value !== prefs.voiceName) voiceSel.value = '';
@@ -169,8 +201,9 @@
   if (synth) {
     fillVoices();
     if (synth.addEventListener) synth.addEventListener('voiceschanged', fillVoices);
+    try { if (synth.onvoiceschanged === null || synth.onvoiceschanged === undefined) synth.onvoiceschanged = fillVoices; } catch (e) {}
   } else {
-    $('voiceNote').hidden = false; voiceSel.disabled = true; $('vol').disabled = true; $('testVoice').disabled = true;
+    $('voiceNote').hidden = false; voiceSel.disabled = true; $('vol').disabled = true; $('testVoice').disabled = true; $('refreshVoices').disabled = true;
   }
   function speak(text, force) {
     if (!synth || (!prefs.voice && !force)) return;
@@ -178,9 +211,9 @@
       synth.cancel();
       var u = new SpeechSynthesisUtterance(text);
       var st = VSTYLES[prefs.voiceStyle] || VSTYLES.natural;
-      u.lang = 'it-IT'; u.volume = prefs.volume; u.rate = st.rate; u.pitch = st.pitch;
-      var v = voices.filter(function (x) { return x.name === prefs.voiceName; })[0] || bestVoice();
-      if (v) u.voice = v;
+      var v0 = voices.filter(function (x) { return x.name === prefs.voiceName; })[0] || bestVoice();
+      u.lang = (v0 && v0.lang) || langInfo().bcp; u.volume = prefs.volume; u.rate = st.rate; u.pitch = st.pitch;
+      if (v0) u.voice = v0;
       synth.speak(u);
     } catch (e) {}
   }
@@ -188,7 +221,7 @@
     if (!synth) return;
     try { var u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); } catch (e) {}
   }
-  function testSpeak() { speak('Ciao, sono la tua voce di bordo. Tra trecento metri, svolta a destra.', true); }
+  function testSpeak() { speak(t('testPhrase'), true); }
 
   /* ---------- Edifici, strade e autovelox da OpenStreetMap ---------- */
   var cells = {}, cellList = [], queue = [], loading = false, SEEN = {}, CAMS = {}, camList = [], netErr = 0;
@@ -340,17 +373,20 @@
 
   /* Overpass: usato solo per autovelox e limiti. Due server a rotazione. */
   function overpass(q, kind) {
-    var order = [reqN % OVERPASS.length, (reqN + 1) % OVERPASS.length];
+    var now = Date.now(), order = [], i;
+    for (i = 0; i < OVERPASS.length; i++) order.push((reqN + i) % OVERPASS.length);
     reqN++;
-    if (srvBad[order[0]] > Date.now() && srvBad[order[1]] <= Date.now()) order.reverse();
+    order.sort(function (a, b) { return ((srvBad[a] || 0) > now ? 1 : 0) - ((srvBad[b] || 0) > now ? 1 : 0); });
+    order = order.slice(0, 3);
+    var tmo = [12000, 16000, 20000];
     function attempt(k, lastErr) {
       if (k >= order.length) return Promise.reject(lastErr || new Error('overpass'));
       var si = order[k], t0 = Date.now();
-      return fetchJson(OVERPASS[si], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, k === 0 ? 14000 : 20000).then(function (j) {
+      return fetchJson(OVERPASS[si], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, tmo[k]).then(function (j) {
         logReq(hostOf(OVERPASS[si]), kind, Date.now() - t0, 'ok');
         return j;
       }, function (e) {
-        srvBad[si] = Date.now() + 45000;
+        srvBad[si] = Date.now() + 60000;
         logReq(hostOf(OVERPASS[si]), kind, Date.now() - t0, e && e.status ? 'errore ' + e.status : (e && e.message) || 'errore');
         return attempt(k + 1, e);
       });
@@ -520,12 +556,12 @@
     }
     return Promise.resolve(buf);
   }
-  function fetchTile(x, y, ms) {
+  function fetchTile(x, y, ms, zz) {
     return new Promise(function (resolve, reject) {
       var ctl = window.AbortController ? new AbortController() : null, done = false;
       var timer = setTimeout(function () { if (done) return; done = true; if (ctl) ctl.abort(); reject(new Error('timeout')); }, ms);
       function fail(e) { if (done) return; done = true; clearTimeout(timer); reject(e); }
-      fetch(TILE_URL.replace('{z}', TILE_Z).replace('{x}', x).replace('{y}', y), ctl ? { signal: ctl.signal } : {}).then(function (r) {
+      fetch(TILE_URL.replace('{z}', zz === undefined ? TILE_Z : zz).replace('{x}', x).replace('{y}', y), ctl ? { signal: ctl.signal } : {}).then(function (r) {
         if (r.status === 404 || r.status === 204) { if (!done) { done = true; clearTimeout(timer); resolve(new ArrayBuffer(0)); } return; }
         if (!r.ok) { var e = new Error('http ' + r.status); e.status = r.status; return fail(e); }
         return r.arrayBuffer().then(gunzip).then(function (b) { if (done) return; done = true; clearTimeout(timer); resolve(b); });
@@ -643,6 +679,7 @@
   }
   function ensureData() {
     if (!ORG) return;
+    if (!myAdded) injectMyCams();
     wantAround(car.x, car.y, DATA_R);
     wantAround(car.x + Math.cos(phi) * 380, car.y + Math.sin(phi) * 380, 200);
     if (view.free) wantAround(view.fx, view.fy, Math.min(cm.R + 150, 1600));
@@ -654,12 +691,12 @@
   function dataStatus() {
     var done = 0, total = 0, bad = 0, k;
     for (k in cells) { total++; if (cells[k].sr === 'ok') done++; else if (cells[k].sr === 'err') bad++; }
-    if (done + bad < total) return 'carico ' + done + '/' + (total - bad);
-    if (bad && !done) return 'rete assente';
-    return done ? 'ok' : '--';
+    if (done + bad < total) return t('mapLoading', done, total - bad);
+    if (bad && !done) return t('mapNoNet');
+    return done ? t('mapOk') : '--';
   }
   function diagText() {
-    if (!diag.length) return 'Nessuna richiesta di rete ancora (mappa dalla cache o in attesa).';
+    if (!diag.length) return t('diagNone');
     return diag.map(function (d) { return d.host + ' · ' + d.kind + ' · ' + (d.ms / 1000).toFixed(1).replace('.', ',') + ' s · ' + d.res; }).join('\n');
   }
 
@@ -699,7 +736,7 @@
     });
   }
   function searchNominatim(q) {
-    var url = NOMINATIM + '?format=jsonv2&limit=6&accept-language=it&q=' + encodeURIComponent(q);
+    var url = NOMINATIM + '?format=jsonv2&limit=6&accept-language=' + prefs.lang + '&q=' + encodeURIComponent(q);
     return fetchJson(url, null, 10000).then(function (j) {
       return (j || []).map(function (r) {
         var parts = String(r.display_name || '').split(',');
@@ -709,7 +746,7 @@
   }
   function doSearch(q) {
     var seq = ++searchSeq;
-    showResMsg('Cerco…');
+    showResMsg(t('searching'));
     searchPhoton(q).catch(function () { return []; }).then(function (list) {
       return list.length ? list : searchNominatim(q);
     }).then(function (list) {
@@ -722,13 +759,13 @@
   }
   function renderResults(list) {
     results.innerHTML = '';
-    if (!list.length) { showResMsg('Nessun risultato. Prova con indirizzo e città.'); return; }
+    if (!list.length) { showResMsg(t('noResults')); return; }
     list.forEach(function (r) {
       var li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.className = 'res';
-      var t = document.createElement('b'); t.textContent = r.name;
+      var tb = document.createElement('b'); tb.textContent = r.name;
       var s = document.createElement('span'); s.textContent = r.sub || '';
-      b.appendChild(t); if (r.sub) b.appendChild(s);
+      b.appendChild(tb); if (r.sub) b.appendChild(s);
       b.addEventListener('click', function () { chooseDest(r); });
       li.appendChild(b); results.appendChild(li);
     });
@@ -747,40 +784,61 @@
   });
 
   /* ---------- Percorso ---------- */
-  var ORD = ['prima', 'seconda', 'terza', 'quarta', 'quinta', 'sesta', 'settima', 'ottava', 'nona', 'decima'];
-  function ordinal(n) { return ORD[n - 1] || 'numero ' + n; }
+  /* Frasi di guida: stile (persona) e lingua; se manca una chiave si usa il Classico della stessa lingua */
+  function phSets() {
+    var lang = prefs.lang, pr = (lang === 'it' || lang === 'en') ? prefs.persona : 'classic';
+    return [(NRL.ph[pr] && NRL.ph[pr][lang]) || null, NRL.ph.classic[lang] || NRL.ph.classic.it];
+  }
+  function getp(o, path) {
+    var parts = path.split('.');
+    for (var i = 0; i < parts.length; i++) { if (o == null) return null; o = o[parts[i]]; }
+    return o == null ? null : o;
+  }
+  function pv(path, seed, raw) {
+    var sets = phSets(), v = getp(sets[0], path);
+    if (v == null) v = getp(sets[1], path);
+    if (!raw && Array.isArray(v)) v = v[Math.abs(Math.round(seed || 0)) % v.length];
+    return v;
+  }
+  function ordWord(n) {
+    if (prefs.persona === 'hacker' && (prefs.lang === 'it' || prefs.lang === 'en')) return String(n);
+    var list = pv('ord', 0, true) || [];
+    return list[n - 1] || String(n);
+  }
   function keepMan(type, mod) {
     if (type === 'depart' || type === 'new name' || type === 'notification' || type === 'exit roundabout' || type === 'exit rotary' || type === 'arrive') return false;
     if ((type === 'continue' || type === 'turn') && (!mod || mod === 'straight')) return false;
     return true;
   }
   function describe(m) {
-    var mod = m.mod || '';
-    var side = /left/.test(mod) ? 'sinistra' : /right/.test(mod) ? 'destra' : '';
-    var strength = /^slight/.test(mod) ? 'leggermente ' : /^sharp/.test(mod) ? 'decisamente ' : '';
-    var icon = side === 'destra' ? 'right' : side === 'sinistra' ? 'left' : 'straight';
+    var mod = m.mod || '', sd = /left/.test(mod) ? 'left' : /right/.test(mod) ? 'right' : 'x', seed = Math.round(m.d || 0) + (m.type || '').length;
+    var st = /^slight/.test(mod) ? 'slight' : /^sharp/.test(mod) ? 'sharp' : '';
+    var icon = sd === 'right' ? 'right' : sd === 'left' ? 'left' : 'straight';
     switch (m.type) {
-      case 'arrive': return { icon: 'arrive', text: side ? 'la destinazione è sulla ' + side : 'arrivo a destinazione' };
+      case 'arrive': return { icon: 'arrive', text: pv('arrive.' + sd, seed) };
       case 'roundabout': case 'rotary': case 'roundabout turn':
-        return { icon: 'round', text: 'alla rotonda, ' + (m.exit ? 'prendi la ' + ordinal(m.exit) + ' uscita' : 'segui le indicazioni') };
-      case 'fork': return { icon: icon, text: side ? 'al bivio, tieni la ' + side : 'al bivio, prosegui dritto' };
-      case 'merge': return { icon: icon, text: side ? 'immettiti a ' + side : 'immettiti' };
-      case 'on ramp': return { icon: icon, text: side ? 'prendi la rampa a ' + side : 'prendi la rampa' };
-      case 'off ramp': return { icon: icon, text: side ? "prendi l'uscita a " + side : "prendi l'uscita" };
-      case 'end of road': return { icon: icon, text: side ? 'alla fine della strada, svolta a ' + side : 'alla fine della strada, svolta' };
+        return { icon: 'round', text: m.exit ? fill(pv('round', seed), { n: ordWord(m.exit) }) : pv('roundX', seed) };
+      case 'fork': return { icon: icon, text: pv('fork.' + sd, seed) };
+      case 'merge': return { icon: icon, text: pv('merge.' + sd, seed) };
+      case 'on ramp': return { icon: icon, text: pv('onramp.' + sd, seed) };
+      case 'off ramp': return { icon: icon, text: pv('offramp.' + sd, seed) };
+      case 'end of road': return { icon: icon, text: pv('endroad.' + sd, seed) };
       default:
-        if (mod === 'uturn') return { icon: 'uturn', text: 'fai inversione a U' };
-        if (side) return { icon: icon, text: 'svolta ' + strength + 'a ' + side };
-        return { icon: 'straight', text: 'prosegui dritto' };
+        if (mod === 'uturn') return { icon: 'uturn', text: pv('turn.uturn', seed) };
+        if (sd !== 'x') return { icon: icon, text: pv('turn.' + st + sd, seed) };
+        return { icon: 'straight', text: pv('turn.straight', seed) };
     }
   }
-  function maneuverPhrase(man, m) {
-    var d = describe(man);
-    if (man.type === 'arrive') return m < 40 ? 'Sei arrivato a destinazione.' : 'Tra ' + spokenDist(m) + ', ' + d.text + '.';
-    var nm = man.name ? ' su ' + man.name : '';
-    return m < 35 ? 'Ora ' + d.text + nm + '.' : 'Tra ' + spokenDist(m) + ', ' + d.text + nm + '.';
+  function leadText(man, m, speech) {
+    var seed = Math.round(man.d || 0);
+    return m < 35 ? pv('now', seed) : fill(pv('lead', seed), { d: speech ? spokenDist(m) : fmtDist(m) });
   }
-
+  function maneuverPhrase(man, m) {
+    var d = describe(man), seed = Math.round(man.d || 0);
+    if (man.type === 'arrive') return m < 40 ? pv('arriveNow', seed) : leadText(man, m, true) + d.text + '.';
+    var nm = man.name ? fill(pv('tail', 0), { name: man.name }) : '';
+    return leadText(man, m, true) + d.text + nm + '.';
+  }
   function buildRoute(r, dest) {
     var co = r.geometry.coordinates, pts = [], cum = [0], i;
     for (i = 0; i < co.length; i++) {
@@ -849,17 +907,139 @@
     function attempt(extra) {
       return bear ? all(extra + bear).then(null, function (e) { return all(extra); }) : all(extra);
     }
-    return attempt(ex.length ? '&exclude=' + ex.join(',') : '').then(function (j) { return { data: j, dropped: false }; }, function (e) {
+    var mainP = attempt(ex.length ? '&exclude=' + ex.join(',') : '').then(function (j) { return { data: j, dropped: false }; }, function (e) {
       if (ex.length && !e.fatal) return attempt('').then(function (j) { return { data: j, dropped: true }; });
       throw e;
     });
+    var nohwP = ex.indexOf('motorway') >= 0 ? Promise.resolve(null) : attempt('&exclude=motorway').then(function (j) {
+      j.routes.forEach(function (r) { r._nohw = true; }); return j.routes;
+    }, function () { return null; });
+    var ttP = prefs.ttKey ? tomtomRoutes(from, to).catch(function () { return null; }) : Promise.resolve(null);
+    return Promise.all([mainP.then(function (r) { return r; }, function (e) { return { err: e }; }), nohwP, ttP]).then(function (a) {
+      var res = a[0];
+      if (a[2] && a[2].length) return { data: { routes: a[2] }, dropped: false, traffic: true };
+      if (res.err) throw res.err;
+      if (a[1]) res.data.routes = res.data.routes.concat(a[1]);
+      return res;
+    });
+  }
+  /* TomTom (opzionale, con la chiave gratuita dell'utente): percorsi con traffico, convertiti nel formato OSRM */
+  var TT_MAN = { DEPART: ['depart', ''], ARRIVE: ['arrive', ''], ARRIVE_LEFT: ['arrive', 'left'], ARRIVE_RIGHT: ['arrive', 'right'], TURN_LEFT: ['turn', 'left'], TURN_RIGHT: ['turn', 'right'], SHARP_LEFT: ['turn', 'sharp left'], SHARP_RIGHT: ['turn', 'sharp right'], BEAR_LEFT: ['turn', 'slight left'], BEAR_RIGHT: ['turn', 'slight right'], KEEP_LEFT: ['fork', 'left'], KEEP_RIGHT: ['fork', 'right'], MAKE_UTURN: ['turn', 'uturn'], ENTER_MOTORWAY: ['on ramp', ''], ENTER_FREEWAY: ['on ramp', ''], TAKE_EXIT: ['off ramp', ''], ROUNDABOUT_CROSS: ['roundabout', 'straight'], ROUNDABOUT_RIGHT: ['roundabout', 'right'], ROUNDABOUT_LEFT: ['roundabout', 'left'], ROUNDABOUT_BACK: ['roundabout', 'uturn'] };
+  function tomtomRoutes(from, to) {
+    var url = 'https://api.tomtom.com/routing/1/calculateRoute/' + from.lat.toFixed(6) + ',' + from.lon.toFixed(6) + ':' + to.lat.toFixed(6) + ',' + to.lon.toFixed(6) +
+      '/json?key=' + encodeURIComponent(prefs.ttKey) + '&traffic=true&maxAlternatives=2&instructionsType=coded&travelMode=car&routeType=fastest&computeTravelTimeFor=all';
+    var t0 = Date.now();
+    return fetchJson(url, null, 12000).then(function (j) {
+      logReq('api.tomtom.com', 'traffico', Date.now() - t0, 'ok');
+      return (j.routes || []).map(function (r) {
+        var co = [];
+        (r.legs || []).forEach(function (l) { (l.points || []).forEach(function (p) { co.push([p.longitude, p.latitude]); }); });
+        var ins = (r.guidance && r.guidance.instructions) || [], total = r.summary.lengthInMeters, steps = [];
+        ins.forEach(function (it, i) {
+          var m = TT_MAN[it.maneuver] || (/ROUNDABOUT/.test(it.maneuver) ? ['roundabout', 'right'] : ['continue', 'straight']);
+          var nxt = i + 1 < ins.length ? ins[i + 1].routeOffsetInMeters : total;
+          steps.push({ distance: Math.max(0, nxt - it.routeOffsetInMeters), name: it.street || '', maneuver: { type: m[0], modifier: m[1], exit: it.roundaboutExitNumber ? +it.roundaboutExitNumber : undefined } });
+        });
+        return { distance: total, duration: r.summary.travelTimeInSeconds, _delay: r.summary.trafficDelayInSeconds || 0, geometry: { type: 'LineString', coordinates: co }, legs: [{ steps: steps }] };
+      }).filter(function (r) { return r.geometry.coordinates.length > 1; });
+    }, function (e) { logReq('api.tomtom.com', 'traffico', Date.now() - t0, e && e.status ? 'errore ' + e.status : 'errore'); throw e; });
+  }
+  /* Alternative: scarta i duplicati e ne sceglie fino a 3 davvero diverse, etichettate per carattere */
+  function nSteps(r) { var n = 0; (r.legs || []).forEach(function (l) { n += (l.steps || []).length; }); return n; }
+  function sameGeom(a, b) {
+    if (Math.abs(a.distance - b.distance) / Math.max(a.distance, 1) > 0.05) return false;
+    var A = a.geometry.coordinates, B = b.geometry.coordinates, k = 24, hit = 0, i, j;
+    for (i = 0; i < k; i++) {
+      var p = A[Math.floor(i * (A.length - 1) / (k - 1))], best = 1e9, c = Math.cos(p[1] * Math.PI / 180);
+      for (j = 0; j < B.length; j++) {
+        var dx = (B[j][0] - p[0]) * c * 111320, dy = (B[j][1] - p[1]) * 111320, d = dx * dx + dy * dy;
+        if (d < best) best = d;
+      }
+      if (best < 3600) hit++;
+    }
+    return hit / k >= 0.88;
+  }
+  function makeAlts(routes, dest) {
+    var sorted = routes.slice().sort(function (a, b) { return a.duration - b.duration; }), uniq = [];
+    sorted.forEach(function (r) {
+      for (var i = 0; i < uniq.length; i++) if (sameGeom(r, uniq[i])) { return; }
+      uniq.push(r);
+    });
+    var fastest = uniq[0], shortest = uniq[0], simple = uniq[0], nohw = null;
+    uniq.forEach(function (r) {
+      if (r.distance < shortest.distance) shortest = r;
+      if (r.duration <= fastest.duration * 1.6 && (nSteps(r) < nSteps(simple) || (nSteps(r) === nSteps(simple) && r.duration < simple.duration))) simple = r;
+      if (r._nohw && !nohw) nohw = r;
+    });
+    var order = prefs.routeType === 'short' ? [shortest, fastest, simple, nohw] : prefs.routeType === 'simple' ? [simple, fastest, shortest, nohw] : [fastest, shortest, simple, nohw];
+    var pick = [];
+    order.concat(uniq).forEach(function (r) {
+      if (!r || pick.length >= 3 || pick.indexOf(r) >= 0) return;
+      if (r !== fastest && r.duration > fastest.duration * 2) return;
+      pick.push(r);
+    });
+    var lead = prefs.routeType === 'short' ? shortest : prefs.routeType === 'simple' ? simple : fastest;
+    var colors = ['#19e3ff', '#ff2bd6', '#ffd23f'], used = {};
+    return pick.map(function (r, i) {
+      var key = 'altOther';
+      if (r === lead) key = prefs.routeType === 'short' ? 'altShort' : prefs.routeType === 'simple' ? 'altSimple' : 'altFast';
+      else if (r === fastest) key = 'altFast';
+      else if (r === shortest) key = 'altShort';
+      else if (r === simple) key = 'altSimple';
+      else if (r._nohw) key = 'altNoHw';
+      if (used[key]) key = r._nohw ? 'altNoHw' : 'altOther';
+      used[key] = 1;
+      var rt = buildRoute(r, dest);
+      rt.turns = nSteps(r); rt.delay = r._delay || 0;
+      return { rt: rt, key: key, color: colors[i % 3], fastDur: fastest.duration };
+    });
+  }
+  var alts = { list: [], sel: 0 };
+  function renderAlts() {
+    var box = $('alts'); if (!box) return;
+    box.innerHTML = '';
+    if (state !== 'preview' || alts.list.length < 2) { box.hidden = true; return; }
+    box.hidden = false;
+    alts.list.forEach(function (a, i) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'alt'; b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', i === alts.sel ? 'true' : 'false'); b.style.setProperty('--c', a.color);
+      var dd = Math.round((a.rt.dur - a.fastDur) / 60), cmp = dd <= 0 ? t('altSame') : t('altPlus').replace('{0}', dd + ' min');
+      var sub = fmtDist(a.rt.dist) + ' · ' + t('altTurns').replace('{0}', a.rt.turns) + (a.rt.cams.length ? ' · ' + a.rt.cams.length + ' ◎' : '');
+      if (a.rt.delay > 60) sub += ' · ' + t('altTraffic').replace('{0}', fmtDur(a.rt.delay));
+      b.innerHTML = '<span class="dot"></span><span><div class="lbl"></div><div class="sub"></div></span><span class="tm"></span>';
+      b.querySelector('.lbl').textContent = t(a.key); b.querySelector('.sub').textContent = sub;
+      b.querySelector('.tm').innerHTML = '';
+      b.querySelector('.tm').appendChild(document.createTextNode(fmtDur(a.rt.dur)));
+      var sm = document.createElement('small'); sm.textContent = i === 0 && dd <= 0 ? '' : cmp; b.querySelector('.tm').appendChild(sm);
+      b.addEventListener('click', function () { selectAlt(i); });
+      box.appendChild(b);
+    });
+  }
+  function selectAlt(i) {
+    if (!alts.list[i]) return;
+    alts.sel = i; setRoute(alts.list[i].rt); showMeta(); routeCams(route); renderAlts();
+  }
+  function showMeta() {
+    $('pvTitle').textContent = route.dest.name;
+    $('pvMeta').textContent = fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + ' · ' + t('lArr') + ' ' + clockAfter(route.dur);
   }
   function routeCams(rt) {
-    var b = rt.bbox, pad = 0.002;
-    if (b[2] - b[0] > 4 || b[3] - b[1] > 6) return Promise.resolve();
-    var bb = bboxStr(b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad);
-    var q = '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed)$"](' + bb + '););out body;';
-    return overpass(q, 'autovelox').then(function (j) { parseOsm(j); attachCams(rt); }, function () {});
+    if (rt._camsReq) return Promise.resolve();
+    rt._camsReq = true;
+    var DL = 0.3, DN = 0.4, cellsSet = {}, list = [], step = Math.max(1, Math.floor(rt.pts.length / 400)), i;
+    for (i = 0; i < rt.pts.length; i += step) {
+      var ll = toLL(rt.pts[i].x, rt.pts[i].y), ci = Math.floor(ll.lon / DN), cj = Math.floor(ll.lat / DL), key = ci + ',' + cj;
+      if (!cellsSet[key]) { cellsSet[key] = 1; list.push([ci, cj]); }
+    }
+    list = list.slice(0, 10);
+    var pad = 0.002, idx = 0;
+    function worker() {
+      if (idx >= list.length) return Promise.resolve();
+      var c = list[idx++], bb = bboxStr(c[1] * DL - pad, c[0] * DN - pad, (c[1] + 1) * DL + pad, (c[0] + 1) * DN + pad);
+      var q = '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed)$"](' + bb + '););out body;';
+      return overpass(q, 'autovelox').then(function (j) { parseOsm(j); attachCams(rt); }, function () {}).then(worker);
+    }
+    return Promise.all([worker(), worker()]).then(function () { attachCams(rt); renderAlts(); });
   }
   function attachCams(rt) {
     rt.cams = [];
@@ -947,16 +1127,16 @@
     feed({ lat: c.latitude, lon: c.longitude, acc: c.accuracy, speed: (c.speed != null && !isNaN(c.speed)) ? c.speed : null, heading: (c.heading != null && !isNaN(c.heading)) ? c.heading : null, t: Date.now() });
   }
   function onGeoErr(err) {
-    if (err && err.code === 1) gpsErr = 'posizione negata';
-    else if (err && err.code === 2) gpsErr = 'GPS non disponibile';
-    else gpsErr = 'in attesa';
+    if (err && err.code === 1) gpsErr = 'denied';
+    else if (err && err.code === 2) gpsErr = 'na';
+    else gpsErr = 'wait';
     if (err && err.code === 1) $('demoBtn').hidden = false;
   }
   function startGPS() {
-    if (!navigator.geolocation) { gpsErr = 'non supportato'; $('demoBtn').hidden = false; return; }
+    if (!navigator.geolocation) { gpsErr = 'nosupport'; $('demoBtn').hidden = false; return; }
     navigator.geolocation.watchPosition(onFix, onGeoErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
   }
-  function resetData() { gen++; cells = {}; cellList = []; queue = []; SEEN = {}; CAMS = {}; camList = []; limWays = []; xcells = {}; xqueue = []; }
+  function resetData() { gen++; cells = {}; cellList = []; queue = []; SEEN = {}; CAMS = {}; camList = []; limWays = []; xcells = {}; xqueue = []; myAdded = false; }
 
   /* ---------- Navigazione ---------- */
   var toastTimer = null;
@@ -980,18 +1160,18 @@
     return ((Math.atan2(Math.cos(phiT), -Math.sin(phiT)) * 180 / Math.PI) % 360 + 360) % 360;
   }
   function chooseDest(r) {
-    if (!here) { toast('Serve la posizione. Attiva il GPS oppure usa la posizione di esempio.'); $('demoBtn').hidden = false; return; }
+    if (!here) { toast(t('needPos')); $('demoBtn').hidden = false; return; }
     var dest = { name: r.name, sub: r.sub, lat: r.lat, lon: r.lon };
     results.innerHTML = ''; $('q').value = r.name;
-    showResMsg('Calcolo il percorso…');
+    showResMsg(t('calcRoute'));
     getRoute(here, dest, movingHeading()).then(function (res) {
-      var rt = buildRoute(pickRoute(res.data.routes), dest);
-      setRoute(rt);
-      $('pvNote').textContent = (res.dropped ? 'Il server non supporta le esclusioni scelte: percorso calcolato senza. ' : '') + 'Durata stimata senza traffico.';
+      alts = { list: makeAlts(res.data.routes, dest), sel: 0 };
+      setRoute(alts.list[0].rt);
+      $('pvNote').textContent = (res.dropped ? t('dropped') : '') + (res.traffic ? t('withTraffic') : t('noTraffic'));
       showPreview();
-      routeCams(rt);
+      routeCams(route);
     }, function (e) {
-      showResMsg(e && e.fatal ? 'Nessun percorso trovato verso questa destinazione.' : 'Server dei percorsi non raggiungibile. Riprova tra poco.');
+      showResMsg(e && e.fatal ? t('noRoute') : t('srvDown'));
     });
   }
   function setRoute(rt) {
@@ -999,9 +1179,9 @@
     attachCams(rt);
   }
   function showPreview() {
-    $('pvTitle').textContent = route.dest.name;
-    $('pvMeta').textContent = fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + ' · arrivo ' + clockAfter(route.dur);
+    showMeta();
     setState('preview');
+    renderAlts();
     fitRoute();
     ensureData();
   }
@@ -1024,7 +1204,7 @@
     if (prefs.voice && prefs.voiceTurn) {
       spoken.m0a = 1;
       if (route.man[0].d <= 150) spoken.m0b = 1;
-      speak('Si parte. ' + maneuverPhrase(route.man[0], Math.max(0, route.man[0].d)));
+      speak(pv('start', 0) + maneuverPhrase(route.man[0], Math.max(0, route.man[0].d)));
     }
   }
   function simTick() {
@@ -1045,20 +1225,21 @@
   function arrive() {
     if (state !== 'nav') return;
     setState('arrived');
-    if (prefs.voice) speak('Sei arrivato a destinazione.');
+    if (prefs.voice) speak(pv('arrived', 0));
     requestWake(false);
     clearInterval(sim.timer);
   }
   function reroute() {
     if (rerouting || !route || !here) return;
     rerouting = true; lastReroute = Date.now();
-    toast('Ricalcolo del percorso…'); speak('Ricalcolo del percorso.');
+    toast(t('rerouteToast')); speak(pv('reroute', Date.now() % 7));
     var dest = route.dest;
     getRoute(here, dest, movingHeading()).then(function (res) {
-      setRoute(buildRoute(pickRoute(res.data.routes), dest));
+      alts = { list: [], sel: 0 };
+      setRoute(makeAlts(res.data.routes, dest)[0].rt);
       routeCams(route);
       rerouting = false;
-    }, function () { rerouting = false; toast('Non riesco a ricalcolare: server non raggiungibile.'); });
+    }, function () { rerouting = false; toast(t('rerouteFail')); });
   }
   function requestWake(on) {
     try {
@@ -1105,7 +1286,7 @@
     }
     if (cam && prefs.voiceCam && !spoken['c' + cam.id]) {
       spoken['c' + cam.id] = 1;
-      speak('Attenzione, autovelox fisso tra ' + spokenDist(cam.dist) + '.' + (cam.limit ? ' Limite ' + limitDisp(cam.limit) + '.' : ''));
+      speak(fill(pv('cam', cam.dist), { d: spokenDist(cam.dist) }) + (cam.limit ? fill(pv('camLimit', cam.dist), { l: limitDisp(cam.limit) }) : ''));
     }
   }
 
@@ -1130,7 +1311,7 @@
     els['v' + n].parentNode.className = label ? '' : 'empty';
   }
   function updatePlayBtn() {
-    var label = sim.running ? 'Pausa simulazione' : 'Riprendi simulazione';
+    var label = sim.running ? t('pauseSim') : t('resumeSim');
     els.playBtn.innerHTML = sim.running ? PLAY_ICONS.pause : PLAY_ICONS.play;
     els.playBtn.setAttribute('aria-label', label); els.playBtn.title = label;
   }
@@ -1140,39 +1321,39 @@
     els.unit.textContent = prefs.units === 'mi' ? 'mph' : 'km/h';
     els.limit.style.visibility = limitNow > 0 ? 'visible' : 'hidden';
     els.limit.textContent = limitNow > 0 ? String(limitDisp(limitNow)) : '';
-    els.limit.setAttribute('aria-label', limitNow > 0 ? 'Limite di velocità ' + limitDisp(limitNow) : 'Limite non noto');
+    els.limit.setAttribute('aria-label', limitNow > 0 ? t('limitAria', limitDisp(limitNow)) : t('limitUnknown'));
     els.speedBox.classList.toggle('over', limitNow > 0 && kmh > limitNow + 2);
-    var gpsText = sim.active ? 'simulato' : gps ? '±' + Math.round(gps.acc) + ' m' : (demoPos ? 'di esempio' : (gpsErr || 'in attesa'));
+    var gpsText = sim.active ? t('gpsSim') : gps ? '±' + Math.round(gps.acc) + ' m' : (demoPos ? t('gpsExample') : (gpsErr === 'denied' ? t('gpsDeniedS') : gpsErr === 'na' || gpsErr === 'nosupport' ? t('gpsNA') : t('gpsWaiting')));
 
     if (state === 'nav' || state === 'arrived') {
       nm = nextMan();
       var man = nm.m, ds = describe(man), m = Math.max(0, man.d - prog.d);
       if (state === 'arrived') {
         if (lastIcon !== 'arrive') { els.ticon.innerHTML = ICONS.arrive; lastIcon = 'arrive'; }
-        els.tstreet.textContent = 'Sei arrivato'; els.voice.textContent = 'Hai raggiunto ' + route.dest.name + '.'; els.tdist.textContent = fmtDist(0);
+        els.tstreet.textContent = t('arrivedT'); els.voice.textContent = t('reached', route.dest.name); els.tdist.textContent = fmtDist(0);
       } else {
         if (lastIcon !== ds.icon) { els.ticon.innerHTML = ICONS[ds.icon]; lastIcon = ds.icon; }
-        els.tstreet.textContent = man.type === 'arrive' ? route.dest.name : (man.name ? 'Su ' + man.name : ds.text.charAt(0).toUpperCase() + ds.text.slice(1));
-        els.voice.textContent = m < 35 ? 'Ora ' + ds.text + '.' : 'Tra ' + fmtDist(m) + ', ' + ds.text + '.';
+        els.tstreet.textContent = man.type === 'arrive' ? route.dest.name : (man.name ? t('onSt', man.name) : ds.text.charAt(0).toUpperCase() + ds.text.slice(1));
+        els.voice.textContent = leadText(man, m, false) + ds.text + '.';
         els.tdist.textContent = fmtDist(m);
       }
       var rem = Math.max(0, route.total - prog.d), sec = route.dur * (rem / Math.max(1, route.total));
-      setRow(1, 'Arrivo', state === 'arrived' ? '--:--' : clockAfter(sec), 'arr');
-      setRow(2, 'Resta', state === 'arrived' ? '0 min' : fmtDur(sec));
-      setRow(3, 'Distanza', fmtDist(rem));
+      setRow(1, t('lArr'), state === 'arrived' ? '--:--' : clockAfter(sec), 'arr');
+      setRow(2, t('lLeft'), state === 'arrived' ? '0 ' + t('min') : fmtDur(sec));
+      setRow(3, t('lDist'), fmtDist(rem));
       cam = state === 'nav' ? camAhead() : null;
     } else {
-      setRow(1, 'GPS', gpsText);
-      setRow(2, 'Mappa', dataStatus());
+      setRow(1, t('lGps'), gpsText);
+      setRow(2, t('lMap'), dataStatus());
       setRow(3, '', '');
-      els.gpsLine.textContent = gps || sim.active ? 'Posizione trovata (' + gpsText + '). Scrivi dove vuoi andare.' : demoPos ? 'Sto usando una posizione di esempio a Milano.' : gpsErr === 'posizione negata' ? 'Posizione negata. Abilitala nelle impostazioni del browser per questo sito.' : gpsErr === 'non supportato' ? 'Questo browser non fornisce la posizione.' : 'In attesa del GPS…';
-      $('demoBtn').hidden = !!(gps || demoPos) || !(gpsErr === 'posizione negata' || gpsErr === 'non supportato' || gpsErr === 'GPS non disponibile' || performance.now() > 8000);
+      els.gpsLine.textContent = gps || sim.active ? t('gpsFound', gpsText) : demoPos ? t('gpsUsingExample') : gpsErr === 'denied' ? t('gpsDenied') : gpsErr === 'nosupport' ? t('gpsNoSupport') : t('gpsWaitLine');
+      $('demoBtn').hidden = !!(gps || demoPos) || !(gpsErr === 'denied' || gpsErr === 'nosupport' || gpsErr === 'na' || performance.now() > 8000);
       cam = camAhead();
     }
-    if (state === 'preview') { setRow(1, 'GPS', gpsText); setRow(2, 'Mappa', dataStatus()); setRow(3, '', ''); }
+    if (state === 'preview') { setRow(1, t('lGps'), gpsText); setRow(2, t('lMap'), dataStatus()); setRow(3, '', ''); }
     if (menuOpen) { var dg = $('diag'); if (dg) dg.textContent = diagText(); }
     els.alert.hidden = !cam;
-    if (cam) els.alertText.innerHTML = 'Autovelox fisso tra <span class="big">' + fmtDist(cam.dist) + '</span>' + (cam.limit ? ' · limite <span class="big">' + limitDisp(cam.limit) + '</span> ' + (prefs.units === 'mi' ? 'mph' : 'km/h') : '');
+    if (cam) els.alertText.innerHTML = t('camHud') + ' <span class="big">' + fmtDist(cam.dist) + '</span>' + (cam.limit ? ' · ' + t('limitWord') + ' <span class="big">' + limitDisp(cam.limit) + '</span> ' + (prefs.units === 'mi' ? 'mph' : 'km/h') : '');
     announce(nm, cam);
   }
 
@@ -1198,16 +1379,21 @@
     prefs.tilt = Math.min(1.25, Math.max(0.35, Number(prefs.tilt) || 0.6));
     prefs.volume = Math.min(1, Math.max(0, Number(prefs.volume)));
     if (prefs.units !== 'km' && prefs.units !== 'mi') prefs.units = 'km';
+    if (['it', 'en', 'es', 'fr', 'de'].indexOf(prefs.lang) < 0) prefs.lang = 'en';
+    if (NRL.personas.indexOf(prefs.persona) < 0) prefs.persona = 'cyber';
+    prefs.ttKey = String(prefs.ttKey || '').replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 80);
   }
   function applyPrefs() {
     sanitize();
     TH = THEMES[prefs.theme] || THEMES.fuchsia; buildWalls();
     PITCH = prefs.tilt;
     syncUI(); if (typeof syncMode === 'function') syncMode();
+    $('ttKey').value = prefs.ttKey; langSel.value = prefs.lang; personaSel.value = prefs.persona;
   }
   function onPref(key) {
     savePrefs(); applyPrefs();
     if (key === 'voiceStyle') testSpeak();
+    if (key === 'voiceAll') fillVoices();
     if (key === 'wake' && state === 'nav') requestWake(true);
   }
   sheet.addEventListener('click', function (e) {
@@ -1226,7 +1412,50 @@
   });
   voiceSel.addEventListener('change', function () { prefs.voiceName = voiceSel.value; savePrefs(); updateVoiceInfo(); testSpeak(); });
   $('testVoice').addEventListener('click', testSpeak);
-  $('resetBtn').addEventListener('click', function () { resetPrefs(); savePrefs(); applyPrefs(); fillVoices(); });
+  $('resetBtn').addEventListener('click', function () { resetPrefs(); savePrefs(); applyPrefs(); applyLang(); fillPersonas(); fillVoices(); renderAlts(); });
+  $('refreshVoices').addEventListener('click', function () { fillVoices(); });
+
+  /* lingua e stile delle indicazioni */
+  var langSel = $('langSel'), personaSel = $('personaSel');
+  NRL.langs.forEach(function (l) { var o = document.createElement('option'); o.value = l.id; o.textContent = l.name; langSel.appendChild(o); });
+  function fillPersonas() {
+    var names = { classic: 'pClassic', cyber: 'pCyber', fun: 'pFun', rocker: 'pRocker', hacker: 'pHacker' };
+    personaSel.innerHTML = '';
+    NRL.personas.forEach(function (id) { var o = document.createElement('option'); o.value = id; o.textContent = t(names[id]); personaSel.appendChild(o); });
+    personaSel.value = prefs.persona;
+  }
+  langSel.addEventListener('change', function () {
+    prefs.lang = langSel.value; prefs.voiceName = ''; savePrefs(); applyPrefs(); applyLang(); fillPersonas(); fillVoices(); updatePlayBtn(); renderAlts();
+    testSpeak();
+  });
+  personaSel.addEventListener('change', function () { prefs.persona = personaSel.value; savePrefs(); testPersona(); });
+  function testPersona() {
+    speak(pv('start', 1) + maneuverPhrase({ type: 'turn', mod: 'right', d: 300, name: '' }, 300), true);
+  }
+  $('ttKey').addEventListener('change', function () { prefs.ttKey = $('ttKey').value.trim(); sanitize(); savePrefs(); $('ttKey').value = prefs.ttKey; });
+
+  /* autovelox aggiunti da te (restano sul dispositivo) */
+  var MYCAM_KEY = 'nightrider.app.mycams', myCams = [], myAdded = false;
+  try { myCams = JSON.parse(localStorage.getItem(MYCAM_KEY) || '[]') || []; } catch (e) { myCams = []; }
+  function saveMyCams() { try { localStorage.setItem(MYCAM_KEY, JSON.stringify(myCams)); } catch (e) {} }
+  function injectMyCams() {
+    if (!ORG) return;
+    for (var i = 0; i < myCams.length; i++) addCam({ id: 'm' + i, lat: myCams[i].lat, lon: myCams[i].lon, tags: { maxspeed: myCams[i].limit ? String(myCams[i].limit) : '' } });
+    myAdded = true;
+  }
+  $('reportCam').addEventListener('click', function () {
+    if (!ORG || !car.has) { toast(t('reportNeedPos')); return; }
+    var ll = toLL(car.x, car.y), lim = limitNow > 0 ? limitNow : 0;
+    myCams.push({ lat: ll.lat, lon: ll.lon, limit: lim }); saveMyCams();
+    addCam({ id: 'm' + (myCams.length - 1), lat: ll.lat, lon: ll.lon, tags: { maxspeed: lim ? String(lim) : '' } });
+    toast(t('reportDone')); closeMenu();
+  });
+  $('reportClear').addEventListener('click', function () {
+    myCams = []; saveMyCams();
+    camList = camList.filter(function (c) { return c.id.charAt(0) !== 'm'; });
+    for (var k in CAMS) if (k.charAt(0) === 'm') delete CAMS[k];
+    toast(t('reportCleared'));
+  });
   function openMenu() {
     if (menuOpen) return;
     menuOpen = true; sheet.hidden = false;
@@ -1256,7 +1485,7 @@
 
   $('goBtn').addEventListener('click', function () { startNav(!gps); });
   $('simBtn').addEventListener('click', function () { startNav(true); });
-  $('cancelBtn').addEventListener('click', function () { route = null; setState('idle'); });
+  $('cancelBtn').addEventListener('click', function () { route = null; alts = { list: [], sel: 0 }; setState('idle'); renderAlts(); });
   $('endBtn').addEventListener('click', endNav);
   els.playBtn.addEventListener('click', function () { sim.running = !sim.running; updatePlayBtn(); });
   $('demoBtn').addEventListener('click', function () {
@@ -1274,9 +1503,15 @@
   var ZMIN3 = 0.4, ZMAX3 = 7, ZMIN2 = 0.12, ZMAX2 = 14;
   function is2D() { return !!prefs.view2d; }
   function setZoom(z) {
-    if (is2D()) view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, z)); else view.z3 = Math.min(ZMAX3, Math.max(ZMIN3, z));
+    if (world.on) {
+      world.z = Math.min(WZMAX, Math.max(WZMIN, Math.log(WK / z) / Math.LN2));
+      if (world.z > world.exitZ) { if (nearOrg()) exitWorld(false); else world.z = Math.min(world.z, WZMAX); }
+      return;
+    }
+    if (is2D()) { if (z > ZMAX2 && ORG && car.has) { enterWorld(); return; } view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, z)); }
+    else { if (z > ZMAX3 && ORG && car.has) { enterWorld(); return; } view.z3 = Math.min(ZMAX3, Math.max(ZMIN3, z)); }
   }
-  function curZoom() { return is2D() ? view.z2 : view.z3; }
+  function curZoom() { return world.on ? WK / Math.pow(2, world.z) : is2D() ? view.z2 : view.z3; }
   function setupCamera() {
     var d2 = is2D();
     cm.Hc = d2 ? HC * 6 * view.z2 : HC * view.z3;
@@ -1460,6 +1695,7 @@
     if (!ORG || !car.has) { overlays(side, t); return; }
 
     setupCamera();
+    if (world.on) { drawWorld(t); overlays(side, t); return; }
     var d2 = is2D(), zf = d2 ? 1 : view.z3, R = cm.R, i, j, k, c, x, y;
 
     // terreno: colore di base e zone (parchi, campagna, industria, acqua)
@@ -1480,6 +1716,17 @@
     var colors = [ROAD_MINOR, ROAD_MAJOR, ROAD_MOTORWAY];
     for (var cl = 0; cl < 3; cl++) {
       if (cl === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
+      if (cl > 0) {                               // contorno scuro: stacca le vie principali dallo sfondo
+        ctx.beginPath();
+        for (k = 0; k < vis[cl].length; k++) {
+          var rc = vis[cl][k];
+          for (i = 0; i < rc.xs.length - 1; i++) {
+            if (Math.abs(rc.xs[i] - fc.x) > V2 && Math.abs(rc.ys[i] - fc.y) > V2) continue;
+            addPoly(seg(rc.xs[i], rc.ys[i], rc.xs[i + 1], rc.ys[i + 1], rc.w * wk * 1.4, 0));
+          }
+        }
+        ctx.fillStyle = 'rgba(8,4,22,0.85)'; ctx.fill();
+      }
       ctx.beginPath();
       for (k = 0; k < vis[cl].length; k++) {
         var r = vis[cl][k];
@@ -1488,7 +1735,8 @@
           addPoly(seg(r.xs[i], r.ys[i], r.xs[i + 1], r.ys[i + 1], r.w * wk, 0));
         }
       }
-      ctx.fillStyle = colors[cl]; ctx.fill();
+      ctx.fillStyle = colors[cl];
+      if (cl === 2) { ctx.save(); ctx.shadowColor = '#b04bff'; ctx.shadowBlur = 10; ctx.fill(); ctx.restore(); } else ctx.fill();
     }
     ctx.beginPath();
     for (cl = 1; cl < 3; cl++) for (k = 0; k < vis[cl].length; k++) {
@@ -1498,7 +1746,7 @@
         addPoly(seg(r2.xs[i], r2.ys[i], r2.xs[i + 1], r2.ys[i + 1], 0.9 * wk, 0));
       }
     }
-    ctx.globalAlpha = 0.3; ctx.fillStyle = C.yel; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.38; ctx.fillStyle = C.yel; ctx.fill(); ctx.globalAlpha = 1;
 
     // percorso
     if (route) drawRoute();
@@ -1602,7 +1850,23 @@
       if (key === 'water') { ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(25,227,255,0.32)'; ctx.stroke(); }
     }
   }
+  function drawAlts() {
+    if (state !== 'preview' || alts.list.length < 2) return;
+    var R2 = cm.R + 60, wk = Math.max(1, cm.Hc / 420);
+    alts.list.forEach(function (a, k) {
+      if (k === alts.sel) return;
+      var pts = a.rt.pts, n = pts.length - 1, i, ax = pts[0].x, ay = pts[0].y;
+      ctx.beginPath();
+      for (i = 1; i <= n; i++) {
+        var bx = pts[i].x, by = pts[i].y;
+        if (!((ax < fc.x - R2 && bx < fc.x - R2) || (ax > fc.x + R2 && bx > fc.x + R2) || (ay < fc.y - R2 && by < fc.y - R2) || (ay > fc.y + R2 && by > fc.y + R2))) addPoly(seg(ax, ay, bx, by, 4.5 * wk, 0));
+        ax = bx; ay = by;
+      }
+      ctx.save(); ctx.globalAlpha = 0.65; ctx.fillStyle = a.color; ctx.shadowColor = a.color; ctx.shadowBlur = 8; ctx.fill(); ctx.restore();
+    });
+  }
   function drawRoute() {
+    drawAlts();
     var pts = route.pts, n = pts.length - 1, i, R2 = cm.R + 60, wk = Math.max(1, cm.Hc / 420);
     var i0 = 0, sx = pts[0].x, sy = pts[0].y;
     if (state === 'nav' || state === 'arrived') {
@@ -1623,7 +1887,7 @@
     batch(5.5);
     ctx.save(); ctx.shadowColor = C.cyan; ctx.shadowBlur = 16; ctx.fillStyle = C.cyan; ctx.fill(); ctx.restore();
   }
-  function overlays(side, t) {
+  function overlays(side, now) {
     var d2o = is2D(), gf = ctx.createLinearGradient(0, 0, 0, H * 0.5);
     gf.addColorStop(0, bgA(d2o ? 0.7 : 0.92)); gf.addColorStop(0.3, bgA(d2o ? 0.3 : 0.62));
     gf.addColorStop(0.62, d2o ? bgA(0.05) : 'rgba(62,8,74,0.22)'); gf.addColorStop(1, bgA(0));
@@ -1641,10 +1905,325 @@
     ctx.fillStyle = gv; ctx.fillRect(0, 0, W, H);
     if (!ORG || !car.has || !cellList.length) {
       ctx.fillStyle = 'rgba(169,159,208,0.9)'; ctx.font = '700 15px Nunito, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(!ORG || !car.has ? 'Cerco la tua posizione…' : 'Carico la mappa…', cm.cx, H * 0.62);
+      ctx.fillText(!ORG || !car.has ? t('searchPos') : t('loadMap'), cm.cx, H * 0.62);
     }
   }
 
+
+  /* ---------- Mondo: mappa Mercator a tile (fino a z14+) e globo quando si esce dal pianeta ---------- */
+  var world = { on: false, mx: 0.5, my: 0.5, z: 12, exitZ: 14, rot: 0 };
+  var WK = 1e6, WZMIN = 1.8, WZ_GLOBE = 3.3, WZMAX = 17.5, WS = 384;
+  var W_LAND = '#150f2e', W_WATER = '#071433', W_SEA = '#050a1c';
+  var W_LC = { wood: '#10253d', grass: '#122a44', farmland: '#191a3f', sand: '#2b2350', ice: '#2c3560', wetland: '#112f4a', rock: '#1f1a3c' };
+  var W_LU = { residential: '#231a4a', industrial: '#2b1c40', commercial: '#2d1a49', cemetery: '#122a44', park: '#122a44' };
+  var W_ROAD = { motorway: ['#b04bff', 1.7, 4], trunk: ['#8d49e0', 1.4, 4], primary: ['#6d3fb8', 1.2, 6], secondary: ['#4f3a99', 1.0, 8], tertiary: ['#3b2e78', 0.9, 10], minor: ['#2d2360', 0.7, 12], service: ['#251c52', 0.5, 14] };
+  var wTiles = {}, wCount = 0, wInfl = 0, wWant = [], wFrame = 0;
+  var wTex = null, wTexCtx = null, wTexData = null, wTexDirty = false, wTexT = 0, wTexVer = 0;
+  function mxOf(lon) { return (lon + 180) / 360; }
+  function myOf(lat) { var r = Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2; }
+  function lonOfMx(mx) { return mx * 360 - 180; }
+  function latOfMy(my) { return Math.atan(Math.sinh(Math.PI * (1 - 2 * my))) * 180 / Math.PI; }
+  function wzOfLocal(lat, z2) { return Math.log(156543.03 * Math.cos(lat * Math.PI / 180) / (HC * 6 * z2 / cm.F)) / Math.LN2; }
+  function nearOrg() { var ll = { lat: latOfMy(world.my), lon: lonOfMx(world.mx) }; return Math.abs(ll.lat - ORG.lat) < 0.9 && Math.abs(ll.lon - ORG.lon) < 1.3; }
+  function enterWorld() {
+    var ll = toLL(fc.x, fc.y);
+    world.mx = mxOf(ll.lon); world.my = myOf(ll.lat);
+    world.z = wzOfLocal(ll.lat, ZMAX2) - 0.01; world.exitZ = wzOfLocal(ll.lat, ZMAX2 * 0.8);
+    world.rot = Math.atan2(cm.fy, cm.fx); world.on = true; rcBtn.hidden = false;
+  }
+  function exitWorld(follow) {
+    world.on = false;
+    if (follow) { view.free = false; rcBtn.hidden = true; }
+    else {
+      var p = toXY(latOfMy(world.my), lonOfMx(world.mx));
+      view.free = true; view.fx = p.x; view.fy = p.y; view.rot = world.rot; rcBtn.hidden = false;
+    }
+    if (is2D()) view.z2 = ZMAX2 * 0.8; else view.z3 = ZMAX3 * 0.8;
+    ensureData();
+  }
+  function worldPan(dx, dy) {
+    var s = 256 * Math.pow(2, world.z);
+    world.mx = ((world.mx - dx / s) % 1 + 1) % 1;
+    world.my = Math.max(0.01, Math.min(0.99, world.my - dy / s));
+  }
+  function wTile(z, x, y) {
+    var n = Math.pow(2, z); x = ((x % n) + n) % n;
+    if (y < 0 || y >= n) return null;
+    var k = z + '/' + x + '/' + y, e = wTiles[k];
+    if (!e) { e = wTiles[k] = { z: z, x: x, y: y, st: 0, cv: null, pl: null, use: 0, t: 0, inTex: false }; wCount++; }
+    e.use = wFrame;
+    if (e.st === 3 && Date.now() - e.t > 15000) e.st = 0;
+    if (e.st === 0 && wWant.indexOf(e) < 0) wWant.push(e);
+    return e;
+  }
+  function wPeek(z, x, y) { var n = Math.pow(2, z), e = wTiles[z + '/' + (((x % n) + n) % n) + '/' + y]; return e && e.st === 2 ? e : null; }
+  function wPump() {
+    if (!wWant.length) return;
+    var cz = Math.round(world.z), n = Math.pow(2, Math.min(14, Math.max(0, cz))), cx = world.mx * n, cy = world.my * n;
+    wWant.sort(function (a, b) {
+      var sa = Math.pow(2, a.z - cz), sb = Math.pow(2, b.z - cz);
+      return Math.hypot(a.x + 0.5 - cx * sa, a.y + 0.5 - cy * sa) / sa - Math.hypot(b.x + 0.5 - cx * sb, b.y + 0.5 - cy * sb) / sb;
+    });
+    while (wInfl < 6 && wWant.length) wLoad(wWant.shift());
+  }
+  function wLoad(e) {
+    e.st = 1; wInfl++;
+    var key = 'w:' + e.z + '/' + e.x + '/' + e.y, t0 = Date.now();
+    cacheGet(key).then(function (c) {
+      if (c && c.els && c.els.byteLength !== undefined) return c.els;
+      return fetchTile(e.x, e.y, 15000, e.z).then(function (b) { if (b.byteLength) cachePut(key, b); logReq(TILE_HOST, 'mondo', Date.now() - t0, 'ok'); return b; });
+    }).then(function (buf) {
+      try { wRender(e, buf); e.st = 2; if (e.z === 3) { wTexDirty = true; } }
+      catch (er) { e.st = 3; e.t = Date.now(); }
+    }, function (er) { e.st = 3; e.t = Date.now(); logReq(TILE_HOST, 'mondo', Date.now() - t0, er && er.status ? 'errore ' + er.status : 'errore'); }).then(function () { wInfl--; });
+  }
+  function wRender(e, buf) {
+    var cv2 = document.createElement('canvas'); cv2.width = cv2.height = WS;
+    var g = cv2.getContext('2d'), z = e.z, places = [];
+    if (!buf || !buf.byteLength) { g.fillStyle = W_WATER; g.fillRect(0, 0, WS, WS); e.cv = cv2; e.pl = places; return; }
+    var T = mvtDecode(buf), i, j, k;
+    g.fillStyle = W_LAND; g.fillRect(0, 0, WS, WS);
+    function path(L, f, close) {
+      var gm = T.geom(f), sc = WS / L.ext;
+      for (var a = 0; a < gm.length; a++) {
+        var r = gm[a];
+        g.moveTo(r[0] * sc, r[1] * sc);
+        for (var b = 2; b < r.length; b += 2) g.lineTo(r[b] * sc, r[b + 1] * sc);
+        if (close) g.closePath();
+      }
+    }
+    function polys(name, table, prop, minZ) {
+      var L = T.layers[name]; if (!L || z < minZ) return;
+      var by = {};
+      for (var q = 0; q < L.feats.length; q++) {
+        var f = L.feats[q]; if (f.type !== 3) continue;
+        var key = table ? T.props(L, f)[prop] : 'x';
+        if (table && !table[key]) continue;
+        (by[key] || (by[key] = [])).push(f);
+      }
+      for (var kk in by) {
+        g.beginPath();
+        for (var w = 0; w < by[kk].length; w++) path(L, by[kk][w], true);
+        g.fillStyle = table ? table[kk] : W_WATER; g.fill('evenodd');
+      }
+    }
+    polys('landcover', W_LC, 'class', 0);
+    polys('landuse', W_LU, 'class', 8);
+    var WL = T.layers.water;
+    if (WL) {
+      g.beginPath();
+      for (i = 0; i < WL.feats.length; i++) if (WL.feats[i].type === 3) path(WL, WL.feats[i], true);
+      g.fillStyle = W_WATER; g.fill('evenodd');
+      g.lineWidth = 0.9; g.strokeStyle = 'rgba(25,227,255,0.38)'; g.stroke();
+    }
+    var WW = T.layers.waterway;
+    if (WW && z >= 9) {
+      g.beginPath();
+      for (i = 0; i < WW.feats.length; i++) if (WW.feats[i].type === 2) path(WW, WW.feats[i], false);
+      g.lineWidth = 0.6; g.strokeStyle = 'rgba(25,227,255,0.3)'; g.stroke();
+    }
+    var TR = T.layers.transportation;
+    if (TR && z >= 4) {
+      var byc = {};
+      for (i = 0; i < TR.feats.length; i++) {
+        var tf = TR.feats[i]; if (tf.type !== 2) continue;
+        var cl = T.props(TR, tf).class, rs = W_ROAD[cl];
+        if (!rs || z < rs[2]) continue;
+        (byc[cl] || (byc[cl] = [])).push(tf);
+      }
+      ['service', 'minor', 'tertiary', 'secondary', 'primary', 'trunk', 'motorway'].forEach(function (cl) {
+        if (!byc[cl]) return;
+        g.beginPath();
+        for (var q = 0; q < byc[cl].length; q++) path(TR, byc[cl][q], false);
+        g.strokeStyle = W_ROAD[cl][0]; g.lineWidth = W_ROAD[cl][1] * (0.8 + Math.max(0, z - 6) * 0.12); g.lineJoin = 'round'; g.stroke();
+      });
+    }
+    var BD = T.layers.boundary;
+    if (BD) {
+      var bl = { 2: [], 4: [] };
+      for (i = 0; i < BD.feats.length; i++) {
+        var bf = BD.feats[i]; if (bf.type !== 2) continue;
+        var bp = T.props(BD, bf); if (bp.maritime === 1 && bp.admin_level > 2) continue;
+        if (bp.admin_level <= 2) bl[2].push(bf); else if (bp.admin_level <= 4 && z >= 3) bl[4].push(bf);
+      }
+      g.beginPath(); for (i = 0; i < bl[4].length; i++) path(BD, bl[4][i], false);
+      g.strokeStyle = 'rgba(166,75,255,0.5)'; g.lineWidth = 0.8; g.setLineDash([3, 3]); g.stroke(); g.setLineDash([]);
+      g.beginPath(); for (i = 0; i < bl[2].length; i++) path(BD, bl[2][i], false);
+      g.strokeStyle = 'rgba(255,43,214,0.85)'; g.lineWidth = 1.3; g.stroke();
+    }
+    var PL = T.layers.place;
+    if (PL) for (i = 0; i < PL.feats.length; i++) {
+      var pf = PL.feats[i]; if (pf.type !== 1) continue;
+      var pp = T.props(PL, pf), pg = T.geom(pf);
+      if (!pg.length || !pp.name) continue;
+      places.push({ x: pg[0][0] / PL.ext, y: pg[0][1] / PL.ext, c: pp['class'], r: pp.rank || 99,
+        n: { it: pp['name:it'], en: pp['name:en'], es: pp['name:es'], fr: pp['name:fr'], de: pp['name:de'], la: pp['name:latin'], d: pp.name } });
+    }
+    e.cv = cv2; e.pl = places;
+  }
+  function wEvict() {
+    if (wCount < 110) return;
+    var arr = [], k;
+    for (k in wTiles) arr.push(wTiles[k]);
+    arr.sort(function (a, b) { return a.use - b.use; });
+    for (var i = 0; i < arr.length - 80; i++) { if (arr[i].st === 1 || arr[i].use >= wFrame - 2) continue; delete wTiles[arr[i].z + '/' + arr[i].x + '/' + arr[i].y]; wCount--; }
+  }
+  function wScr(lat, lon) {
+    if (world.z < WZ_GLOBE) {
+      var R = 256 * Math.pow(2, world.z) / (2 * Math.PI), p0 = latOfMy(world.my) * Math.PI / 180, l0 = lonOfMx(world.mx) * Math.PI / 180;
+      var p = lat * Math.PI / 180, dl = lon * Math.PI / 180 - l0, cc = Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(dl);
+      return { x: cm.cx + R * Math.cos(p) * Math.sin(dl), y: H * 0.5 - R * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(dl)), vis: cc > 0 };
+    }
+    var wp = 256 * Math.pow(2, world.z), dx = mxOf(lon) - world.mx;
+    dx -= Math.round(dx);
+    return { x: cm.cx + dx * wp, y: H * 0.5 + (myOf(lat) - world.my) * wp, vis: true };
+  }
+  function drawWorldFlat(alpha) {
+    var Zt = Math.max(0, Math.min(14, Math.round(world.z))), wp = 256 * Math.pow(2, world.z), sc = wp / Math.pow(2, Zt);
+    var cxp = world.mx * wp, cyp = world.my * wp, cx = cm.cx, cy = H * 0.5;
+    var tx0 = Math.floor((cxp - cx) / sc), tx1 = Math.floor((cxp + (W - cx)) / sc), ty0 = Math.floor((cyp - cy) / sc), ty1 = Math.floor((cyp + (H - cy)) / sc);
+    var tx, ty, k, labels = [];
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.fillStyle = W_SEA; ctx.fillRect(0, 0, W, H);
+    for (ty = ty0; ty <= ty1; ty++) for (tx = tx0; tx <= tx1; tx++) {
+      var e = wTile(Zt, tx, ty); if (!e) continue;
+      var sx = cx + tx * sc - cxp, sy = cy + ty * sc - cyp;
+      if (e.st === 2) {
+        ctx.drawImage(e.cv, Math.floor(sx), Math.floor(sy), Math.ceil(sc) + 1, Math.ceil(sc) + 1);
+        for (k = 0; k < e.pl.length; k++) labels.push({ p: e.pl[k], x: sx + e.pl[k].x * sc, y: sy + e.pl[k].y * sc });
+      } else {
+        var n = Math.pow(2, Zt), txw = ((tx % n) + n) % n;
+        for (k = 1; k <= Zt; k++) {
+          var pe = wPeek(Zt - k, txw >> k, ty >> k);
+          if (pe) {
+            var ss = WS / Math.pow(2, k), sub = Math.pow(2, k);
+            ctx.drawImage(pe.cv, (txw % sub) * ss, (ty % sub) * ss, ss, ss, Math.floor(sx), Math.floor(sy), Math.ceil(sc) + 1, Math.ceil(sc) + 1);
+            break;
+          }
+        }
+      }
+    }
+    ctx.restore();
+    if (alpha > 0.6) drawPlaces(labels);
+  }
+  function drawPlaces(labels) {
+    var wz = world.z, lang = prefs.lang, out = [], i;
+    for (i = 0; i < labels.length; i++) {
+      var p = labels[i].p, c = p.c, ok = false, pr = 0, fs = 12;
+      if (c === 'country') { ok = wz <= 7.5 && p.r <= (wz - 0.6) * 2.4 + 1; pr = 100 - p.r; fs = 15; }
+      else if (c === 'state' || c === 'province') { ok = wz >= 4 && wz <= 10; pr = 70 - p.r; fs = 12; }
+      else if (c === 'city') { ok = wz >= 3.6 && p.r <= (wz - 2) * 2.4; pr = 60 - p.r; fs = 13; }
+      else if (c === 'town') { ok = wz >= 8.5; pr = 40 - p.r * 0.2; fs = 12; }
+      else if (c === 'village') { ok = wz >= 11; pr = 30; fs = 11; }
+      else if (c === 'suburb' || c === 'neighbourhood' || c === 'quarter' || c === 'hamlet') { ok = wz >= 12.5; pr = 20; fs = 11; }
+      if (!ok) continue;
+      var nm = p.n[lang] || p.n.la || p.n.d;
+      if (!nm) continue;
+      out.push({ nm: c === 'country' ? nm.toUpperCase() : nm, x: labels[i].x, y: labels[i].y, pr: pr, fs: fs, c: c });
+    }
+    out.sort(function (a, b) { return b.pr - a.pr; });
+    var placed = [], seen = {};
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+    for (i = 0; i < out.length && placed.length < 90; i++) {
+      var o = out[i];
+      if (o.x < -40 || o.x > W + 40 || o.y < -10 || o.y > H + 10 || seen[o.nm]) continue;
+      ctx.font = (o.c === 'country' ? '800 ' : '700 ') + o.fs + 'px Nunito, sans-serif';
+      var w = ctx.measureText(o.nm).width + 10, h = o.fs + 6, hit = false;
+      for (var q = 0; q < placed.length; q++) { var b = placed[q]; if (Math.abs(b.x - o.x) < (b.w + w) / 2 && Math.abs(b.y - o.y) < (b.h + h) / 2) { hit = true; break; } }
+      if (hit) continue;
+      placed.push({ x: o.x, y: o.y, w: w, h: h }); seen[o.nm] = 1;
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(5,6,22,0.85)'; ctx.strokeText(o.nm, o.x, o.y);
+      ctx.fillStyle = o.c === 'country' ? '#ff8fe9' : o.c === 'state' ? '#b9a6ff' : '#e9e4ff'; ctx.fillText(o.nm, o.x, o.y);
+      if (o.c === 'city' || o.c === 'town') { ctx.beginPath(); ctx.arc(o.x, o.y + o.fs * 0.95, 2, 0, 6.2832); ctx.fillStyle = C.cyan; ctx.fill(); }
+    }
+  }
+  function wTexPrep() {
+    if (!wTex) {
+      wTex = document.createElement('canvas'); wTex.width = wTex.height = 2048;
+      wTexCtx = wTex.getContext('2d'); wTexCtx.fillStyle = W_WATER; wTexCtx.fillRect(0, 0, 2048, 2048);
+    }
+    var x, y, n = 8;
+    for (y = 0; y < n; y++) for (x = 0; x < n; x++) {
+      var e = wTile(3, x, y);
+      if (e && e.st === 2 && !e.inTex) { wTexCtx.drawImage(e.cv, x * 256, y * 256, 256, 256); e.inTex = true; wTexDirty = true; }
+    }
+    if (wTexDirty && (!wTexData || Date.now() - wTexT > 400)) {
+      try { wTexData = new Uint32Array(wTexCtx.getImageData(0, 0, 2048, 2048).data.buffer); wTexVer++; } catch (er) {}
+      wTexDirty = false; wTexT = Date.now();
+    }
+  }
+  var gCv = null, gImg = null, gKey = '', stars = null;
+  function drawGlobe(alpha) {
+    wTexPrep();
+    var R = 256 * Math.pow(2, world.z) / (2 * Math.PI), cx = cm.cx, cy = H * 0.5, i, j;
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#04050f'; ctx.fillRect(0, 0, W, H);
+    if (!stars) { stars = []; var s = 7; for (i = 0; i < 140; i++) { s = (s * 16807) % 2147483647; var a = s / 2147483647; s = (s * 16807) % 2147483647; stars.push([a, s / 2147483647, 0.4 + (i % 5) * 0.18]); } }
+    for (i = 0; i < stars.length; i++) { ctx.fillStyle = 'rgba(190,200,255,' + (0.25 + stars[i][2] * 0.4) + ')'; ctx.fillRect(stars[i][0] * W, stars[i][1] * H, stars[i][2] * 1.6, stars[i][2] * 1.6); }
+    var gl = ctx.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.22);
+    gl.addColorStop(0, 'rgba(25,227,255,0.45)'); gl.addColorStop(0.45, 'rgba(255,43,214,0.16)'); gl.addColorStop(1, 'rgba(25,227,255,0)');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(cx, cy, R * 1.22, 0, 6.2832); ctx.fill();
+    if (wTexData) {
+      var step = R > 380 ? 3 : 2, N = Math.max(8, Math.min(Math.ceil(2 * R / step), 700)), key = [N, world.mx.toFixed(5), world.my.toFixed(5), wTexVer].join();
+      if (!gCv || gCv.width !== N) { gCv = document.createElement('canvas'); gCv.width = gCv.height = N; gImg = gCv.getContext('2d').createImageData(N, N); gKey = ''; }
+      if (key !== gKey) {
+        gKey = key;
+        var p0 = latOfMy(world.my) * Math.PI / 180, l0 = lonOfMx(world.mx) * Math.PI / 180, sp = Math.sin(p0), cp = Math.cos(p0);
+        var out = new Uint32Array(gImg.data.buffer), tex = wTexData, M = 2047;
+        for (j = 0; j < N; j++) {
+          var yy = -((j + 0.5) / N * 2 - 1);
+          for (i = 0; i < N; i++) {
+            var xx = (i + 0.5) / N * 2 - 1, r2 = xx * xx + yy * yy;
+            if (r2 >= 1) { out[j * N + i] = 0; continue; }
+            var zc = Math.sqrt(1 - r2), rho = Math.sqrt(r2), phi2, lam;
+            if (rho < 1e-9) { phi2 = p0; lam = l0; }
+            else { phi2 = Math.asin(zc * sp + yy * rho * cp / rho); lam = l0 + Math.atan2(xx * rho, rho * cp * zc - yy * sp * rho); }
+            var u = lam / (2 * Math.PI) + 0.5; u -= Math.floor(u);
+            var v = (1 - Math.log(Math.tan(Math.PI / 4 + Math.max(-1.4835, Math.min(1.4835, phi2)) / 2)) / Math.PI) / 2;
+            var px = tex[Math.max(0, Math.min(M, Math.floor(v * 2048))) * 2048 + Math.min(M, Math.floor(u * 2048))];
+            var sh = 0.32 + 0.68 * Math.pow(zc, 0.55), rr = (px & 255) * sh, gg = ((px >> 8) & 255) * sh, bb = ((px >> 16) & 255) * sh;
+            out[j * N + i] = (255 << 24) | ((bb > 255 ? 255 : bb) << 16) | ((gg > 255 ? 255 : gg) << 8) | (rr > 255 ? 255 : rr);
+          }
+        }
+        gCv.getContext('2d').putImageData(gImg, 0, 0);
+      }
+      ctx.imageSmoothingEnabled = true; ctx.drawImage(gCv, cx - R, cy - R, 2 * R, 2 * R);
+    } else {
+      ctx.fillStyle = W_WATER; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.fill();
+    }
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(25,227,255,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.stroke();
+    ctx.restore();
+  }
+  function drawWorldMarks(t) {
+    var i, ll = toLL(car.x, car.y), me = wScr(ll.lat, ll.lon);
+    if (route) {
+      ctx.beginPath();
+      var step = Math.max(1, Math.floor(route.pts.length / 300)), started = false;
+      for (i = 0; i < route.pts.length; i += step) {
+        var q = toLL(route.pts[i].x, route.pts[i].y), s = wScr(q.lat, q.lon);
+        if (!s.vis) { started = false; continue; }
+        if (started) ctx.lineTo(s.x, s.y); else { ctx.moveTo(s.x, s.y); started = true; }
+      }
+      ctx.lineWidth = 3; ctx.strokeStyle = C.cyan; ctx.shadowColor = C.cyan; ctx.shadowBlur = 10; ctx.lineCap = 'round'; ctx.stroke(); ctx.shadowBlur = 0;
+      var d = wScr(route.dest.lat, route.dest.lon);
+      if (d.vis) { ctx.beginPath(); ctx.moveTo(d.x, d.y - 9); ctx.lineTo(d.x + 7, d.y); ctx.lineTo(d.x, d.y + 9); ctx.lineTo(d.x - 7, d.y); ctx.closePath(); ctx.fillStyle = C.bg; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.yel; ctx.stroke(); }
+    }
+    if (me.vis) {
+      var ph = ((t / 1000) % 1.6) / 1.6;
+      ctx.beginPath(); ctx.arc(me.x, me.y, 7 + ph * 22, 0, 6.2832); ctx.strokeStyle = 'rgba(255,46,136,' + (0.75 * (1 - ph)) + ')'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(me.x, me.y, 6, 0, 6.2832); ctx.fillStyle = prefs.carColor || C.mag; ctx.shadowColor = prefs.carColor || C.mag; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
+      ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    }
+  }
+  function drawWorld(t) {
+    wFrame++; wWant.length = 0;
+    var gA = world.z < WZ_GLOBE + 0.45 ? Math.min(1, (WZ_GLOBE + 0.45 - world.z) / 0.5) : 0;
+    if (gA < 1) drawWorldFlat(1);
+    if (gA > 0) drawGlobe(gA);
+    drawWorldMarks(t);
+    wPump();
+    if (wFrame % 90 === 0) wEvict();
+  }
 
   /* ---------- Esplorare la mappa: trascina, pizzica, ruota, 2D/3D ---------- */
   var ptrs = {}, gest = null, rcBtn = $('recenterBtn'), modeBtn = $('modeBtn');
@@ -1656,6 +2235,7 @@
     rcBtn.hidden = false;
   }
   function recenter() {
+    if (world.on) { exitWorld(true); return; }
     view.free = false; rcBtn.hidden = true; ensureData();
   }
   function fitRoute() {
@@ -1691,6 +2271,18 @@
     if (!ptrs[e.pointerId] || !gest) return;
     ptrs[e.pointerId] = pos(e); touch();
     var ids = Object.keys(ptrs);
+    if (world.on) {
+      if (gest.t === 'pan' && ids.length === 1) {
+        var pw = ptrs[ids[0]];
+        if (!gest.on) { if (Math.hypot(pw.x - gest.x0, pw.y - gest.y0) < 7) return; gest.on = true; gest.px = gest.x0; gest.py = gest.y0; }
+        worldPan(pw.x - gest.px, pw.y - gest.py); gest.px = pw.x; gest.py = pw.y;
+      } else if (gest.t === 'pinch' && ids.length >= 2) {
+        var qa = ptrs[ids[0]], qb = ptrs[ids[1]], qd = Math.hypot(qa.x - qb.x, qa.y - qb.y) || 1;
+        setZoom(gest.z0 * gest.d0 / qd);
+        if (!world.on) { gest.w = false; gest.z0 = curZoom(); gest.d0 = qd; }
+      }
+      return;
+    }
     if (gest.t === 'pan' && ids.length === 1) {
       var p = ptrs[ids[0]];
       if (!gest.on) {
@@ -1702,10 +2294,11 @@
       if (gest.g0 && g1) { view.fx += gest.g0.x - g1.x; view.fy += gest.g0.y - g1.y; }
     } else if (gest.t === 'pinch' && ids.length >= 2) {
       var a = ptrs[ids[0]], b = ptrs[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      if (!view.free) { setZoom(gest.z0 * gest.d0 / d); return; }
+      if (!view.free) { setZoom(gest.z0 * gest.d0 / d); if (world.on) { gest.z0 = curZoom(); gest.d0 = d; } return; }
       if (!gest.g0) gest.g0 = groundAt(mid.x, mid.y);
       if (gest.r0 === null) gest.r0 = view.rot;
       setZoom(gest.z0 * gest.d0 / d);
+      if (world.on) { gest.z0 = curZoom(); gest.d0 = d; return; }
       view.rot = gest.r0 - (Math.atan2(b.y - a.y, b.x - a.x) - gest.a0);
       setupCamera();
       var g2 = groundAt(mid.x, mid.y);
@@ -1724,6 +2317,7 @@
     if (!ORG || !car.has) return;
     e.preventDefault(); touch();
     var f = Math.exp(e.deltaY * 0.0015);
+    if (world.on) { setZoom(curZoom() * f); return; }
     if (view.free) {
       var p = pos(e), g0 = groundAt(p.x, p.y);
       setZoom(curZoom() * f); setupCamera();
@@ -1735,7 +2329,7 @@
   $('zoomOut').addEventListener('click', function () { setZoom(curZoom() * 1.4); touch(); });
   rcBtn.addEventListener('click', recenter);
   modeBtn.addEventListener('click', function () { prefs.view2d = !prefs.view2d; savePrefs(); applyPrefs(); touch(); });
-  function syncMode() { modeBtn.textContent = prefs.view2d ? '2D' : '3D'; modeBtn.setAttribute('aria-label', prefs.view2d ? 'Passa alla vista 3D' : 'Passa alla vista 2D'); }
+  function syncMode() { modeBtn.textContent = prefs.view2d ? '2D' : '3D'; modeBtn.setAttribute('aria-label', prefs.view2d ? t('to3d') : t('to2d')); }
 
   /* ---------- Ciclo principale ---------- */
   var last = performance.now(), hudT = 0, dataT = 0, limT = 0;
@@ -1748,7 +2342,7 @@
       var diff = ((phiT - phi + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
       phi += diff * Math.min(1, dt * 4);
     }
-    if (view.free && state === 'nav' && !Object.keys(ptrs).length && Date.now() - view.last > 15000) recenter();
+    if ((view.free || world.on) && state === 'nav' && !Object.keys(ptrs).length && Date.now() - view.last > 15000) recenter();
     var t0 = performance.now();
     draw(now);
     var cost = (performance.now() - t0) / 1000;
@@ -1764,6 +2358,9 @@
 
   /* ---------- Avvio ---------- */
   applyPrefs();
+  applyLang();
+  fillPersonas();
+  fillVoices();
   setState('idle');
   updatePlayBtn();
   try {
@@ -1779,7 +2376,7 @@
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
   window.__nightrider = {
-    info: function () { return { state: state, gps: gps, here: here, route: route && { total: route.total, man: route.man.length, cams: route.cams.length }, prog: prog, cells: cellList.length, cams: camList.length, speed: speedMs, limit: limitNow, maxB: maxB, free: view.free, z3: view.z3, z2: view.z2, d2: is2D(), car: { x: car.x, y: car.y }, trail: route ? (function () { var pr = projectOnRoute(route, car.x, car.y, prog.idx, false); return { d: pr.d, dist: pr.dist }; })() : null }; },
+    info: function () { return { state: state, gps: gps, here: here, route: route && { total: route.total, man: route.man.length, cams: route.cams.length }, prog: prog, cells: cellList.length, cams: camList.length, speed: speedMs, limit: limitNow, maxB: maxB, free: view.free, world: { on: world.on, z: world.z, mx: world.mx, my: world.my }, z3: view.z3, z2: view.z2, d2: is2D(), car: { x: car.x, y: car.y }, trail: route ? (function () { var pr = projectOnRoute(route, car.x, car.y, prog.idx, false); return { d: pr.d, dist: pr.dist }; })() : null }; },
     pick: function (rs, type) { var o = prefs.routeType; prefs.routeType = type; var x = pickRoute(rs); prefs.routeType = o; return x; }
   };
 })();

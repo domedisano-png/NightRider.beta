@@ -20,34 +20,34 @@
 </head>
 <body>
 <div id="app" data-state="idle">
-  <canvas id="map" role="img" aria-label="Mappa 3D a tema neon con il percorso evidenziato in azzurro"></canvas>
+  <canvas id="map" role="img" data-i18n-aria="aMap" aria-label="Mappa a tema neon con il percorso evidenziato in azzurro"></canvas>
 
   <header class="top">
     <div class="bar">
       <div class="brandpill"><span class="brand">NightRider</span><span class="badge" id="badge">beta</span></div>
       <div class="bar-btns">
-        <button type="button" class="round" id="playBtn" aria-label="Pausa simulazione" title="Pausa simulazione" hidden></button>
-        <button type="button" class="round" id="endBtn" aria-label="Termina" title="Termina" hidden>
+        <button type="button" class="round" id="playBtn" aria-label="Pausa simulazione" hidden></button>
+        <button type="button" class="round" id="endBtn" data-i18n-aria="endAria" aria-label="Termina" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
-        <button type="button" class="round" id="menuBtn" aria-label="Menu e preferenze" title="Menu e preferenze" aria-haspopup="dialog">
+        <button type="button" class="round" id="menuBtn" data-i18n-aria="menuAria" aria-label="Menu e preferenze" aria-haspopup="dialog">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
         </button>
       </div>
     </div>
 
-    <section class="panel search" id="searchPanel" aria-label="Ricerca destinazione">
+    <section class="panel search" id="searchPanel" data-i18n-aria="aSearch" aria-label="Ricerca destinazione">
       <form class="field" id="searchForm" role="search" autocomplete="off">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
-        <label class="sr" for="q">Dove vuoi andare?</label>
-        <input id="q" type="search" placeholder="Dove vuoi andare?" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <label class="sr" for="q" data-i18n="phQ">Dove vuoi andare?</label>
+        <input id="q" type="search" data-i18n-ph="phQ" placeholder="Dove vuoi andare?" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false">
       </form>
       <ul class="results" id="results" aria-live="polite"></ul>
-      <p class="note" id="gpsLine">In attesa del GPS…</p>
-      <button type="button" class="btn" id="demoBtn" hidden>Prova da una posizione di esempio (Milano)</button>
+      <p class="note" id="gpsLine" data-i18n="gpsWait">In attesa del GPS…</p>
+      <button type="button" class="btn" id="demoBtn" data-i18n="demoBtn" hidden>Prova da una posizione di esempio (Milano)</button>
     </section>
 
-    <section class="panel turn" id="turnPanel" aria-label="Prossima manovra" hidden>
+    <section class="panel turn" id="turnPanel" data-i18n-aria="aTurn" aria-label="Prossima manovra" hidden>
       <div class="ticon" id="ticon" aria-hidden="true"></div>
       <div>
         <div class="tstreet" id="tstreet"></div>
@@ -64,23 +64,24 @@
   </header>
 
   <div class="mapctl" id="mapctl">
-    <button type="button" class="round" id="zoomIn" aria-label="Avvicina la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
-    <button type="button" class="round" id="zoomOut" aria-label="Allontana la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
-    <button type="button" class="round txt" id="modeBtn" aria-label="Cambia tra vista 2D e 3D">3D</button>
-    <button type="button" class="round" id="recenterBtn" aria-label="Torna alla mia posizione" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
+    <button type="button" class="round" id="zoomIn" data-i18n-aria="zIn" aria-label="Avvicina la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" class="round" id="zoomOut" data-i18n-aria="zOut" aria-label="Allontana la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+    <button type="button" class="round txt" id="modeBtn" aria-label="2D / 3D">3D</button>
+    <button type="button" class="round" id="recenterBtn" data-i18n-aria="recenter" aria-label="Torna alla mia posizione" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
   </div>
   <div class="bottom">
-    <section class="panel preview" id="previewPanel" aria-label="Riepilogo del percorso" hidden>
+    <section class="panel preview" id="previewPanel" data-i18n-aria="aPreview" aria-label="Riepilogo del percorso" hidden>
       <div class="pv-title" id="pvTitle"></div>
+      <div class="alts" id="alts" role="radiogroup" data-i18n-aria="chooseRoute" aria-label="Scegli il percorso"></div>
       <div class="pv-meta" id="pvMeta"></div>
       <p class="note" id="pvNote"></p>
       <div class="pv-btns">
-        <button type="button" class="btn primary" id="goBtn">Avvia</button>
-        <button type="button" class="btn" id="simBtn">Prova senza muoverti</button>
-        <button type="button" class="btn" id="cancelBtn">Annulla</button>
+        <button type="button" class="btn primary" id="goBtn" data-i18n="go">Avvia</button>
+        <button type="button" class="btn" id="simBtn" data-i18n="sim">Prova senza muoverti</button>
+        <button type="button" class="btn" id="cancelBtn" data-i18n="cancel">Annulla</button>
       </div>
     </section>
-    <section class="panel stats" aria-label="Velocità e arrivo">
+    <section class="panel stats" data-i18n-aria="aStats" aria-label="Velocità e arrivo">
       <div class="speed" id="speedBox">
         <span class="num" id="speed">0</span>
         <span class="unit" id="unit">km/h</span>
@@ -100,123 +101,151 @@
   <div class="scrim" id="scrim"></div>
   <div class="sheet-panel" id="sheetPanel">
     <div class="sheet-head">
-      <h2 id="sheetTitle">Preferenze</h2>
-      <button type="button" class="round" id="closeBtn" aria-label="Chiudi il menu">
+      <h2 id="sheetTitle" data-i18n="menuTitle">Preferenze</h2>
+      <button type="button" class="round" id="closeBtn" data-i18n-aria="closeMenu" aria-label="Chiudi il menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
 
     <section class="sec">
-      <h3>Percorso</h3>
-      <div class="fl" id="fl-route">Tipo di percorso</div>
+      <h3 data-i18n="sLang">Lingua</h3>
+      <div class="fl"><label for="langSel" data-i18n="langLbl">Lingua dell'app e della voce</label></div>
+      <select id="langSel"></select>
+      <p class="note" data-i18n="langNote">Cambia anche le frasi della guida vocale.</p>
+    </section>
+
+    <section class="sec">
+      <h3 data-i18n="sRoute">Percorso</h3>
+      <div class="fl" id="fl-route" data-i18n="routeType">Percorso suggerito per primo</div>
       <div class="seg" role="radiogroup" aria-labelledby="fl-route">
-        <button type="button" role="radio" data-key="routeType" data-val="fast">Più veloce</button>
-        <button type="button" role="radio" data-key="routeType" data-val="short">Più breve</button>
-        <button type="button" role="radio" data-key="routeType" data-val="simple">Meno svolte</button>
+        <button type="button" role="radio" data-key="routeType" data-val="fast" data-i18n="fast">Più veloce</button>
+        <button type="button" role="radio" data-key="routeType" data-val="short" data-i18n="short">Più breve</button>
+        <button type="button" role="radio" data-key="routeType" data-val="simple" data-i18n="simple">Meno svolte</button>
       </div>
       <div style="margin-top:10px">
-        <button type="button" class="sw" role="switch" data-key="avoidHighway"><span>Evita le autostrade</span><span class="track"><i></i></span></button>
-        <button type="button" class="sw" role="switch" data-key="avoidToll"><span>Evita i pedaggi</span><span class="track"><i></i></span></button>
+        <button type="button" class="sw" role="switch" data-key="avoidHighway"><span data-i18n="avoidHw">Evita le autostrade</span><span class="track"><i></i></span></button>
+        <button type="button" class="sw" role="switch" data-key="avoidToll"><span data-i18n="avoidToll">Evita i pedaggi</span><span class="track"><i></i></span></button>
       </div>
-      <p class="note">Il calcolo usa un server gratuito. Se non supporta queste esclusioni, il percorso viene calcolato senza e ti avviso.</p>
+      <p class="note" data-i18n="routeNote">Prima di partire vedi fino a tre alternative e scegli tu.</p>
     </section>
 
     <section class="sec">
-      <h3>Il tuo mezzo</h3>
-      <div class="picks" role="radiogroup" aria-label="Icona del mezzo">
+      <h3 data-i18n="sVehicle">Il tuo mezzo</h3>
+      <div class="picks" role="radiogroup" data-i18n-aria="aIcon" aria-label="Icona del mezzo">
         <button type="button" class="pick" role="radio" data-key="carIcon" data-val="arrow">
-          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><path d="M17 4l10 25-10-5-10 5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Freccia
+          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><path d="M17 4l10 25-10-5-10 5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span data-i18n="iArrow">Freccia</span>
         </button>
         <button type="button" class="pick" role="radio" data-key="carIcon" data-val="car">
-          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><rect x="9" y="3" width="16" height="28" rx="7"/><rect x="12" y="12" width="10" height="11" rx="3" fill="#07060d" opacity="0.6"/></svg>Auto
+          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><rect x="9" y="3" width="16" height="28" rx="7"/><rect x="12" y="12" width="10" height="11" rx="3" fill="#07060d" opacity="0.6"/></svg><span data-i18n="iCar">Auto</span>
         </button>
         <button type="button" class="pick" role="radio" data-key="carIcon" data-val="moto">
-          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><rect x="14" y="3" width="6" height="28" rx="3"/><rect x="6" y="10" width="22" height="4" rx="2"/></svg>Moto
+          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><rect x="14" y="3" width="6" height="28" rx="3"/><rect x="6" y="10" width="22" height="4" rx="2"/></svg><span data-i18n="iMoto">Moto</span>
         </button>
       </div>
-      <div class="fl" id="fl-color">Colore</div>
+      <div class="fl" id="fl-color" data-i18n="colorLbl">Colore</div>
       <div class="swatches" role="radiogroup" aria-labelledby="fl-color">
-        <button type="button" class="swatch" role="radio" aria-label="Giallo" data-key="carColor" data-val="#f7e733" style="background:#f7e733"></button>
-        <button type="button" class="swatch" role="radio" aria-label="Azzurro" data-key="carColor" data-val="#19e3ff" style="background:#19e3ff"></button>
-        <button type="button" class="swatch" role="radio" aria-label="Fucsia" data-key="carColor" data-val="#ff2e88" style="background:#ff2e88"></button>
-        <button type="button" class="swatch" role="radio" aria-label="Bianco" data-key="carColor" data-val="#f1ecff" style="background:#f1ecff"></button>
-        <button type="button" class="swatch" role="radio" aria-label="Arancio" data-key="carColor" data-val="#ff7a1a" style="background:#ff7a1a"></button>
+        <button type="button" class="swatch" role="radio" data-i18n-aria="cYellow" aria-label="Giallo" data-key="carColor" data-val="#f7e733" style="background:#f7e733"></button>
+        <button type="button" class="swatch" role="radio" data-i18n-aria="cCyan" aria-label="Azzurro" data-key="carColor" data-val="#19e3ff" style="background:#19e3ff"></button>
+        <button type="button" class="swatch" role="radio" data-i18n-aria="cFuchsia" aria-label="Fucsia" data-key="carColor" data-val="#ff2e88" style="background:#ff2e88"></button>
+        <button type="button" class="swatch" role="radio" data-i18n-aria="cWhite" aria-label="Bianco" data-key="carColor" data-val="#f1ecff" style="background:#f1ecff"></button>
+        <button type="button" class="swatch" role="radio" data-i18n-aria="cOrange" aria-label="Arancio" data-key="carColor" data-val="#ff7a1a" style="background:#ff7a1a"></button>
       </div>
     </section>
 
     <section class="sec">
-      <h3>Voce</h3>
-      <button type="button" class="sw" role="switch" data-key="voice"><span>Guida vocale</span><span class="track"><i></i></span></button>
-      <button type="button" class="sw" role="switch" data-key="voiceTurn"><span>Annuncia le svolte</span><span class="track"><i></i></span></button>
-      <button type="button" class="sw" role="switch" data-key="voiceCam"><span>Avvisa degli autovelox</span><span class="track"><i></i></span></button>
-      <div class="fl" id="fl-vstyle">Stile della voce</div>
+      <h3 data-i18n="sVoice">Voce</h3>
+      <button type="button" class="sw" role="switch" data-key="voice"><span data-i18n="vOn">Guida vocale</span><span class="track"><i></i></span></button>
+      <button type="button" class="sw" role="switch" data-key="voiceTurn"><span data-i18n="vTurn">Annuncia le svolte</span><span class="track"><i></i></span></button>
+      <button type="button" class="sw" role="switch" data-key="voiceCam"><span data-i18n="vCam">Avvisa degli autovelox</span><span class="track"><i></i></span></button>
+      <div class="fl"><label for="personaSel" data-i18n="personaLbl">Stile delle indicazioni</label></div>
+      <select id="personaSel"></select>
+      <p class="note" data-i18n="personaNote"></p>
+      <div class="fl" id="fl-vstyle" data-i18n="toneLbl">Tono della voce</div>
       <div class="seg" role="radiogroup" aria-labelledby="fl-vstyle">
-        <button type="button" role="radio" data-key="voiceStyle" data-val="natural">Naturale</button>
-        <button type="button" role="radio" data-key="voiceStyle" data-val="soft">Più calma</button>
+        <button type="button" role="radio" data-key="voiceStyle" data-val="natural" data-i18n="tNatural">Naturale</button>
+        <button type="button" role="radio" data-key="voiceStyle" data-val="soft" data-i18n="tSoft">Più calma</button>
       </div>
-      <div class="fl"><label for="voiceSel">Voce</label></div>
+      <div class="fl"><label for="voiceSel" data-i18n="voiceLbl">Voce</label></div>
       <select id="voiceSel"></select>
-      <div class="fl"><label for="vol">Volume</label><output id="volOut">90%</output></div>
+      <button type="button" class="sw" role="switch" data-key="voiceAll"><span data-i18n="allLangs">Mostra le voci di tutte le lingue</span><span class="track"><i></i></span></button>
+      <div class="fl"><label for="vol" data-i18n="volLbl">Volume</label><output id="volOut">90%</output></div>
       <input type="range" id="vol" data-key="volume" min="0" max="1" step="0.05">
-      <button type="button" class="btn primary" id="testVoice">Prova la voce</button>
+      <div class="btnrow">
+        <button type="button" class="btn primary" id="testVoice" data-i18n="testVoice">Prova la voce</button>
+        <button type="button" class="btn" id="refreshVoices" data-i18n="refreshVoices">Aggiorna l'elenco delle voci</button>
+      </div>
       <p class="note" id="voiceInfo"></p>
-      <p class="note" id="voiceNote" hidden>La sintesi vocale non è disponibile su questo dispositivo.</p>
+      <p class="note" id="voiceNote" data-i18n="voiceNA" hidden></p>
       <details class="tips">
-        <summary>Come avere una voce più naturale</summary>
+        <summary data-i18n="tipsSum">Come aggiungere o migliorare le voci</summary>
         <ul>
-          <li>Edge, su computer o Android: scegli una voce con "Online (Natural)" nel nome, per esempio Elsa o Isabella.</li>
-          <li>iPhone: in Impostazioni, Accessibilità, Contenuto parlato, Voci, Italiano, scarica una voce nella versione Avanzata o Premium.</li>
-          <li>Chrome su Android o computer: prova "Google italiano".</li>
+          <li data-i18n="tip1"></li>
+          <li data-i18n="tip2"></li>
+          <li data-i18n="tip3"></li>
+          <li data-i18n="tip4"></li>
         </ul>
       </details>
     </section>
 
     <section class="sec">
-      <h3>Mappa</h3>
-      <button type="button" class="sw" role="switch" data-key="cams"><span>Mostra gli autovelox</span><span class="track"><i></i></span></button>
-      <button type="button" class="sw" role="switch" data-key="gloss"><span>Riflessi sulle case</span><span class="track"><i></i></span></button>
-      <div class="fl" id="fl-theme">Colore delle case</div>
+      <h3 data-i18n="sMap">Mappa</h3>
+      <button type="button" class="sw" role="switch" data-key="cams"><span data-i18n="camsShow">Mostra gli autovelox</span><span class="track"><i></i></span></button>
+      <button type="button" class="sw" role="switch" data-key="gloss"><span data-i18n="gloss">Riflessi sulle case</span><span class="track"><i></i></span></button>
+      <div class="fl" id="fl-theme" data-i18n="themeLbl">Colore delle case</div>
       <div class="seg" role="radiogroup" aria-labelledby="fl-theme">
-        <button type="button" role="radio" data-key="theme" data-val="fuchsia">Fucsia</button>
-        <button type="button" role="radio" data-key="theme" data-val="cyan">Ciano</button>
-        <button type="button" role="radio" data-key="theme" data-val="amber">Ambra</button>
+        <button type="button" role="radio" data-key="theme" data-val="fuchsia" data-i18n="thFuchsia">Fucsia</button>
+        <button type="button" role="radio" data-key="theme" data-val="cyan" data-i18n="thCyan">Ciano</button>
+        <button type="button" role="radio" data-key="theme" data-val="amber" data-i18n="thAmber">Ambra</button>
       </div>
-      <button type="button" class="sw" role="switch" data-key="view2d"><span>Vista dall'alto (2D)</span><span class="track"><i></i></span></button>
-      <div class="fl"><label for="tilt">Inclinazione della vista</label><output id="tiltOut">34°</output></div>
+      <button type="button" class="sw" role="switch" data-key="view2d"><span data-i18n="view2d">Vista dall'alto (2D)</span><span class="track"><i></i></span></button>
+      <div class="fl"><label for="tilt" data-i18n="tiltLbl">Inclinazione della vista</label><output id="tiltOut">34°</output></div>
       <input type="range" id="tilt" data-key="tilt" min="0.35" max="1.25" step="0.05">
     </section>
 
     <section class="sec">
-      <h3>Altro</h3>
-      <button type="button" class="sw" role="switch" data-key="wake"><span>Tieni lo schermo acceso in navigazione</span><span class="track"><i></i></span></button>
-      <div class="fl" id="fl-units">Unità di misura</div>
-      <div class="seg" role="radiogroup" aria-labelledby="fl-units">
-        <button type="button" role="radio" data-key="units" data-val="km">Chilometri</button>
-        <button type="button" role="radio" data-key="units" data-val="mi">Miglia</button>
+      <h3 data-i18n="sTraffic">Autovelox e traffico</h3>
+      <div class="fl"><label for="ttKey" data-i18n="ttLbl">Chiave TomTom (facoltativa)</label></div>
+      <input type="text" id="ttKey" class="txt" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-i18n-ph="ttPh" placeholder="">
+      <p class="note"><span data-i18n="ttNote"></span> <a href="https://developer.tomtom.com/" target="_blank" rel="noopener" data-i18n="ttLink">Ottieni una chiave gratuita</a></p>
+      <div class="btnrow">
+        <button type="button" class="btn" id="reportCam" data-i18n="reportCam">Aggiungi un autovelox qui</button>
+        <button type="button" class="btn" id="reportClear" data-i18n="reportClear">Cancella i miei autovelox</button>
       </div>
-      <div class="fl" id="fl-sim">Velocità della simulazione</div>
+      <p class="note" data-i18n="reportNote"></p>
+    </section>
+
+    <section class="sec">
+      <h3 data-i18n="sOther">Altro</h3>
+      <button type="button" class="sw" role="switch" data-key="wake"><span data-i18n="wake">Tieni lo schermo acceso in navigazione</span><span class="track"><i></i></span></button>
+      <div class="fl" id="fl-units" data-i18n="unitsLbl">Unità di misura</div>
+      <div class="seg" role="radiogroup" aria-labelledby="fl-units">
+        <button type="button" role="radio" data-key="units" data-val="km" data-i18n="kmUnit">Chilometri</button>
+        <button type="button" role="radio" data-key="units" data-val="mi" data-i18n="miUnit">Miglia</button>
+      </div>
+      <div class="fl" id="fl-sim" data-i18n="simLbl">Velocità della simulazione</div>
       <div class="seg" role="radiogroup" aria-labelledby="fl-sim">
         <button type="button" role="radio" data-key="simMult" data-val="1">×1</button>
         <button type="button" role="radio" data-key="simMult" data-val="3">×3</button>
         <button type="button" role="radio" data-key="simMult" data-val="6">×6</button>
       </div>
-      <button type="button" class="btn" id="resetBtn">Ripristina le impostazioni iniziali</button>
+      <button type="button" class="btn" id="resetBtn" data-i18n="reset">Ripristina le impostazioni iniziali</button>
     </section>
 
     <section class="sec">
-      <h3>Informazioni</h3>
-      <p class="note">Mappe, strade ed edifici: dati © contributori di OpenStreetMap, tile di OpenFreeMap (© OpenMapTiles). Autovelox e limiti: OpenStreetMap via Overpass. Percorsi: OSRM. Ricerca indirizzi: Photon e Nominatim.</p>
-      <p class="note">Il traffico in tempo reale non è disponibile con servizi gratuiti: le durate sono stime senza traffico.</p>
-      <p class="note">Gli avvisi riguardano gli autovelox fissi segnati su OpenStreetMap. Possono mancare, essere cambiati o non più attivi. Rispetta sempre limiti e segnaletica.</p>
-      <p class="note">Per cercare e calcolare i percorsi, la posizione e le destinazioni vengono inviate ai servizi qui sopra.</p>
+      <h3 data-i18n="sInfo">Informazioni</h3>
+      <p class="note" data-i18n="info1"></p>
+      <p class="note" data-i18n="info2"></p>
+      <p class="note" data-i18n="info3"></p>
+      <p class="note" data-i18n="info4"></p>
       <details class="note">
-        <summary>Diagnostica caricamento</summary>
+        <summary data-i18n="diagSum">Diagnostica caricamento</summary>
         <pre id="diag" style="white-space:pre-wrap;font-size:12px;margin:8px 0 0"></pre>
       </details>
     </section>
   </div>
 </div>
 
+<script src="lang.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
