@@ -22,7 +22,8 @@ Alla prima apertura consenti l'accesso alla posizione. Se il GPS non c'è o lo r
 
 1. Scrivi la destinazione nella barra di ricerca e scegli un risultato.
 2. Controlla durata e arrivo. "Avvia" parte con il GPS, "Prova senza muoverti" simula il percorso da fermo.
-3. Durante la guida vedi la prossima svolta, gli avvisi autovelox, il limite e la velocità. Il menù in alto a destra contiene voce, mezzo, colori, unità e altro.
+3. Sulla mappa: trascina con un dito per spostarti, pizzica per lo zoom (con due dita puoi anche ruotare), oppure usa + e −. Il pulsante 2D/3D cambia la vista, il mirino riporta alla tua posizione (in guida ci torna da solo dopo 15 secondi).
+4. Durante la guida vedi la prossima svolta, gli avvisi autovelox, il limite e la velocità. Il menù in alto a destra contiene voce, mezzo, colori, unità e altro.
 
 ## Da dove arrivano i dati
 
@@ -48,4 +49,4 @@ La posizione e le destinazioni vengono inviate a questi servizi per ottenere i d
 
 Non serve nessuna compilazione: sono file statici (`index.html`, `app.css`, `app.js`, `sw.js`, `manifest.webmanifest`). Per provarlo in locale avvia un server nella cartella, per esempio `python3 -m http.server 8000`, e apri `http://localhost:8000`. Il GPS funziona su `localhost` e su indirizzi `https`.
 
-Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v3`, poi `v4` e così via), così i telefoni scaricano la versione nuova.
+Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v4`, poi `v5` e così via), così i telefoni scaricano la versione nuova.

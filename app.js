@@ -57,7 +57,7 @@
     routeType: 'fast', avoidHighway: false, avoidToll: false,
     carIcon: 'arrow', carColor: '#f7e733',
     voice: true, voiceTurn: true, voiceCam: true, voiceName: '', voiceStyle: 'natural', volume: 0.9,
-    cams: true, gloss: true, theme: 'fuchsia', tilt: 0.6,
+    cams: true, gloss: true, theme: 'fuchsia', tilt: 0.6, view2d: false,
     units: 'km', wake: true, simMult: 3
   };
   var prefs = {};
@@ -432,6 +432,11 @@
     return { layers: layers, props: props, geom: geom };
   }
 
+  var GROUND_BASE = '#0e0a1f';
+  var GROUND_COL = { resid: '#15102d', comm: '#1c1236', ind: '#1b1c2b', amen: '#141a33', sand: '#251c28', farm: '#0f2219', grass: '#0b2723', wood: '#082a20', wet: '#0a2631', water: '#081b52' };
+  var GROUND_ORDER = ['resid', 'comm', 'ind', 'amen', 'sand', 'farm', 'grass', 'wood', 'wet', 'water'];
+  var LU_CLASS = { residential: 'resid', suburb: 'resid', neighbourhood: 'resid', commercial: 'comm', retail: 'comm', industrial: 'ind', railway: 'ind', garages: 'ind', quarry: 'ind', landfill: 'ind', cemetery: 'grass', park: 'grass', garden: 'grass', recreation_ground: 'grass', pitch: 'grass', playground: 'grass', golf_course: 'grass', school: 'amen', university: 'amen', college: 'amen', kindergarten: 'amen', hospital: 'amen', stadium: 'amen', zoo: 'amen', theme_park: 'amen', military: 'ind' };
+  var LC_CLASS = { grass: 'grass', farmland: 'farm', wood: 'wood', forest: 'wood', sand: 'sand', wetland: 'wet' };
   var OMT_HW = { motorway: 'motorway', trunk: 'trunk', primary: 'primary', secondary: 'secondary', tertiary: 'tertiary', minor: 'residential', service: 'service' };
   function tileToEls(buf, tx, ty) {
     var T = mvtDecode(buf), els = [], n = Math.pow(2, TILE_Z), i, j, k;
@@ -476,7 +481,36 @@
         els.push({ type: 'way', id: synthId++, tags: { highway: hw }, geometry: g2 });
       }
     }
-    return els;
+    // zone del terreno (campagna, parchi, industria, acqua) come poligoni piatti
+    var ground = [], GL = [['landuse', LU_CLASS, 'class'], ['landcover', LC_CLASS, 'class'], ['water', null, '']];
+    for (var gi = 0; gi < GL.length; gi++) {
+      var GLy = T.layers[GL[gi][0]];
+      if (!GLy) continue;
+      for (i = 0; i < GLy.feats.length; i++) {
+        var gf = GLy.feats[i];
+        if (gf.type !== 3) continue;
+        var key = GL[gi][1] ? GL[gi][1][T.props(GLy, gf)[GL[gi][2]]] : 'water';
+        if (!key) continue;
+        var grs = T.geom(gf), gs0 = 0;
+        for (j = 0; j < grs.length; j++) {
+          var gr = grs[j], gm = gr.length / 2, ga = 0;
+          if (gm < 3) continue;
+          for (k = 0; k < gm; k++) { var kk2 = (k + 1) % gm; ga += gr[2 * k] * gr[2 * kk2 + 1] - gr[2 * kk2] * gr[2 * k + 1]; }
+          var gsg = ga > 0 ? 1 : -1;
+          if (!gs0) gs0 = gsg;
+          if (gsg !== gs0) continue;
+          var xs = [], ys = [], lx = 1e9, ly = 1e9, mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+          for (k = 0; k < gm; k++) {
+            var q = pt(gr[2 * k], gr[2 * k + 1], GLy.ext), w = toXY(q.lat, q.lon);
+            if (Math.abs(w.x - lx) + Math.abs(w.y - ly) < 5 && k < gm - 1) continue;
+            lx = w.x; ly = w.y; xs.push(w.x); ys.push(w.y);
+            if (w.x < mnx) mnx = w.x; if (w.x > mxx) mxx = w.x; if (w.y < mny) mny = w.y; if (w.y > mxy) mxy = w.y;
+          }
+          if (xs.length >= 3) ground.push({ k: key, xs: xs, ys: ys, minx: mnx, maxx: mxx, miny: mny, maxy: mxy });
+        }
+      }
+    }
+    return { els: els, ground: ground };
   }
 
   function gunzip(buf) {
@@ -516,8 +550,9 @@
     for (var kk in cells) { var c = cells[kk]; if (c.sr === 'ok') cellList.push(c); }
   }
   function applyTile(cell, buf) {
-    var parsed = parseOsm({ elements: buf && buf.byteLength ? tileToEls(buf, cell.i, cell.j) : [] });
-    cell.b = parsed.b; cell.r = parsed.r; cell.sr = cell.sb = 'ok';
+    var tl = buf && buf.byteLength ? tileToEls(buf, cell.i, cell.j) : { els: [], ground: [] };
+    var parsed = parseOsm({ elements: tl.els });
+    cell.b = parsed.b; cell.r = parsed.r; cell.g = tl.ground; cell.sr = cell.sb = 'ok';
     refreshCellList();
   }
   function startTile(cell, g) {
@@ -610,6 +645,7 @@
     if (!ORG) return;
     wantAround(car.x, car.y, DATA_R);
     wantAround(car.x + Math.cos(phi) * 380, car.y + Math.sin(phi) * 380, 200);
+    if (view.free) wantAround(view.fx, view.fy, Math.min(cm.R + 150, 1600));
     if (route && (state === 'nav' || state === 'preview')) {
       for (var d = prog.d; d < Math.min(route.total, prog.d + 1200); d += 250) { var p = pointAt(route, d); wantAround(p.x, p.y, 150); }
     }
@@ -771,32 +807,50 @@
     return { pts: pts, cum: cum, total: total, man: man, dur: r.duration || total / 10, dist: r.distance || total, dest: dest, cams: [], bbox: [lo[1], lo[0], hi[1], hi[0]] };
   }
   function pickRoute(routes) {
-    if (prefs.routeType !== 'simple' || routes.length < 2) return routes[0];
-    var fastest = routes[0].duration, best = routes[0], bestN = 1e9;
+    var fastest = 1e12, i;
+    for (i = 0; i < routes.length; i++) fastest = Math.min(fastest, routes[i].duration);
+    var best = routes[0], bv = 1e12;
     routes.forEach(function (r) {
-      var n = 0; (r.legs || []).forEach(function (l) { n += (l.steps || []).length; });
-      if (r.duration <= fastest * 1.35 && n < bestN) { bestN = n; best = r; }
+      var v;
+      if (prefs.routeType === 'short') { if (r.duration > fastest * 1.3) return; v = r.distance + r.duration * 0.001; }
+      else if (prefs.routeType === 'simple') { if (r.duration > fastest * 1.35) return; var n = 0; (r.legs || []).forEach(function (l) { n += (l.steps || []).length; }); v = n * 1e6 + r.duration; }
+      else v = r.duration;
+      if (v < bv) { bv = v; best = r; }
     });
     return best;
   }
-  function getRoute(from, to) {
+  /* Percorsi: si interrogano tutti i server insieme e si sceglie il migliore tra tutte le alternative */
+  function getRoute(from, to, headingDeg) {
     var coords = from.lon.toFixed(6) + ',' + from.lat.toFixed(6) + ';' + to.lon.toFixed(6) + ',' + to.lat.toFixed(6);
     var base = '/route/v1/driving/' + coords + '?overview=full&geometries=geojson&steps=true&alternatives=3';
     var ex = []; if (prefs.avoidHighway) ex.push('motorway'); if (prefs.avoidToll) ex.push('toll');
-    function tryServers(extra) {
-      var i = 0;
-      function next(lastErr) {
-        if (i >= OSRM.length) return Promise.reject(lastErr || new Error('route'));
-        return fetchJson(OSRM[i++] + base + extra, null, 20000).then(function (j) {
-          if (!j || j.code !== 'Ok' || !j.routes || !j.routes.length) { var e = new Error('noroute'); e.code = j && j.code; e.fatal = !!(j && j.code === 'NoRoute'); throw e; }
-          return j;
-        }).catch(function (e) { if (e && e.fatal) throw e; return next(e); });
-      }
-      return next();
+    function one(srv, extra) {
+      return fetchJson(srv + base + extra, null, 14000).then(function (j) {
+        if (!j || j.code !== 'Ok' || !j.routes || !j.routes.length) { var e = new Error('noroute'); e.fatal = !!(j && j.code === 'NoRoute'); throw e; }
+        return j.routes;
+      });
     }
-    var p = tryServers(ex.length ? '&exclude=' + ex.join(',') : '');
-    return p.then(function (j) { return { data: j, dropped: false }; }, function (e) {
-      if (ex.length) return tryServers('').then(function (j) { return { data: j, dropped: true }; });
+    function all(extra) {
+      return new Promise(function (resolve, reject) {
+        var pending = OSRM.length, routes = [], fatal = 0, firstOk = 0, timer = null, finished = false, lastErr = null;
+        function finish() {
+          if (finished) return; finished = true; clearTimeout(timer);
+          if (routes.length) resolve({ routes: routes }); else { var e = lastErr || new Error('route'); e.fatal = fatal === OSRM.length; reject(e); }
+        }
+        OSRM.forEach(function (srv) {
+          one(srv, extra).then(function (rs) {
+            routes = routes.concat(rs);
+            if (!firstOk) { firstOk = Date.now(); timer = setTimeout(finish, 1200); }
+          }, function (e) { lastErr = e; if (e && e.fatal) fatal++; }).then(function () { if (--pending === 0) finish(); });
+        });
+      });
+    }
+    var bear = headingDeg != null ? '&bearings=' + Math.round(headingDeg) + ',60;' : '';
+    function attempt(extra) {
+      return bear ? all(extra + bear).then(null, function (e) { return all(extra); }) : all(extra);
+    }
+    return attempt(ex.length ? '&exclude=' + ex.join(',') : '').then(function (j) { return { data: j, dropped: false }; }, function (e) {
+      if (ex.length && !e.fatal) return attempt('').then(function (j) { return { data: j, dropped: true }; });
       throw e;
     });
   }
@@ -921,12 +975,16 @@
     var b = $('badge'); b.textContent = sim.active ? 'demo' : 'beta'; b.className = sim.active ? 'badge demo' : 'badge';
     if (s !== 'nav') $('alert').hidden = true;
   }
+  function movingHeading() {
+    if (speedMs < 2.5 || sim.active) return null;
+    return ((Math.atan2(Math.cos(phiT), -Math.sin(phiT)) * 180 / Math.PI) % 360 + 360) % 360;
+  }
   function chooseDest(r) {
     if (!here) { toast('Serve la posizione. Attiva il GPS oppure usa la posizione di esempio.'); $('demoBtn').hidden = false; return; }
     var dest = { name: r.name, sub: r.sub, lat: r.lat, lon: r.lon };
     results.innerHTML = ''; $('q').value = r.name;
     showResMsg('Calcolo il percorso…');
-    getRoute(here, dest).then(function (res) {
+    getRoute(here, dest, movingHeading()).then(function (res) {
       var rt = buildRoute(pickRoute(res.data.routes), dest);
       setRoute(rt);
       $('pvNote').textContent = (res.dropped ? 'Il server non supporta le esclusioni scelte: percorso calcolato senza. ' : '') + 'Durata stimata senza traffico.';
@@ -944,6 +1002,7 @@
     $('pvTitle').textContent = route.dest.name;
     $('pvMeta').textContent = fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + ' · arrivo ' + clockAfter(route.dur);
     setState('preview');
+    fitRoute();
     ensureData();
   }
   function startNav(simMode) {
@@ -958,6 +1017,7 @@
       feed({ lat: ll.lat, lon: ll.lon, speed: 0, heading: Math.atan2(p0.hx, -p0.hy) * 180 / Math.PI, t: Date.now(), sim: true });
       clearInterval(sim.timer); sim.timer = setInterval(simTick, 200);
     }
+    recenter();
     setState('nav');
     updatePlayBtn();
     requestWake(true);
@@ -994,7 +1054,7 @@
     rerouting = true; lastReroute = Date.now();
     toast('Ricalcolo del percorso…'); speak('Ricalcolo del percorso.');
     var dest = route.dest;
-    getRoute(here, dest).then(function (res) {
+    getRoute(here, dest, movingHeading()).then(function (res) {
       setRoute(buildRoute(pickRoute(res.data.routes), dest));
       routeCams(route);
       rerouting = false;
@@ -1130,7 +1190,7 @@
     if (voiceSel.value !== prefs.voiceName) voiceSel.value = prefs.voiceName;
   }
   function sanitize() {
-    if (prefs.routeType !== 'fast' && prefs.routeType !== 'simple') prefs.routeType = 'fast';
+    if (['fast', 'short', 'simple'].indexOf(prefs.routeType) < 0) prefs.routeType = 'fast';
     if (!THEMES[prefs.theme]) prefs.theme = 'fuchsia';
     if (!SHAPES[prefs.carIcon]) prefs.carIcon = 'arrow';
     if (!VSTYLES[prefs.voiceStyle]) prefs.voiceStyle = 'natural';
@@ -1143,7 +1203,7 @@
     sanitize();
     TH = THEMES[prefs.theme] || THEMES.fuchsia; buildWalls();
     PITCH = prefs.tilt;
-    syncUI();
+    syncUI(); if (typeof syncMode === 'function') syncMode();
   }
   function onPref(key) {
     savePrefs(); applyPrefs();
@@ -1208,7 +1268,37 @@
   /* ---------- Camera 3D ---------- */
   var cv = $('map'), ctx = cv.getContext('2d'), app = $('app');
   var W = 0, H = 0, dpr = 1, PITCH = prefs.tilt;
-  var cm = { Bk: 60, F: 500, cx: 0, cy: 0, cosT: 1, sinT: 0, fx: 1, fy: 0, rx: 0, ry: 1 };
+  var cm = { Bk: 60, F: 500, cx: 0, cy: 0, cosT: 1, sinT: 0, fx: 1, fy: 0, rx: 0, ry: 1, Hc: HC, T: 0.6, R: VIEW };
+  var fc = { x: 0, y: 0 };                                   // punto guardato dalla camera
+  var view = { free: false, fx: 0, fy: 0, rot: 0, z3: 1, z2: 1, last: 0 };   // esplorazione con le dita
+  var ZMIN3 = 0.4, ZMAX3 = 7, ZMIN2 = 0.12, ZMAX2 = 14;
+  function is2D() { return !!prefs.view2d; }
+  function setZoom(z) {
+    if (is2D()) view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, z)); else view.z3 = Math.min(ZMAX3, Math.max(ZMIN3, z));
+  }
+  function curZoom() { return is2D() ? view.z2 : view.z3; }
+  function setupCamera() {
+    var d2 = is2D();
+    cm.Hc = d2 ? HC * 6 * view.z2 : HC * view.z3;
+    cm.T = d2 ? Math.PI / 2 : PITCH;
+    cm.cosT = Math.cos(cm.T); cm.sinT = Math.sin(cm.T);
+    var cp = view.free ? view.rot : phi;
+    cm.fx = Math.cos(cp); cm.fy = Math.sin(cp); cm.rx = -cm.fy; cm.ry = cm.fx;
+    fc.x = view.free ? view.fx : car.x; fc.y = view.free ? view.fy : car.y;
+    cm.F = Math.min(W * 1.25, H * 1.05);
+    var off = (H * 0.68 - cm.cy) / cm.F;
+    cm.Bk = d2 ? -off * cm.Hc : cm.Hc / Math.tan(cm.T + Math.atan(off));
+    cm.R = d2 ? Math.hypot(W, H) / cm.F * cm.Hc * 0.7 : VIEW * view.z3;
+  }
+  /* punto del terreno sotto un punto dello schermo */
+  function groundAt(sx, sy) {
+    var a = (cm.cy - sy) / cm.F, den = cm.sinT - a * cm.cosT;
+    if (den <= 0.02) return null;
+    var Yd = cm.Hc * (cm.cosT + a * cm.sinT) / den, D = Yd * cm.cosT + cm.Hc * cm.sinT;
+    if (D <= 0 || D > cm.Hc * 12) return null;
+    var X = (sx - cm.cx) / cm.F * D, Yf = Yd - cm.Bk;
+    return { x: fc.x + Yf * cm.fx + X * cm.rx, y: fc.y + Yf * cm.fy + X * cm.ry };
+  }
 
   function resize() {
     var b = app.getBoundingClientRect();
@@ -1220,8 +1310,8 @@
   resize();
 
   function cam3(x, y, z) {
-    var dx = x - car.x, dy = y - car.y;
-    var X = dx * cm.rx + dy * cm.ry, Yd = dx * cm.fx + dy * cm.fy + cm.Bk, Z = z - HC;
+    var dx = x - fc.x, dy = y - fc.y;
+    var X = dx * cm.rx + dy * cm.ry, Yd = dx * cm.fx + dy * cm.fy + cm.Bk, Z = z - cm.Hc;
     return { X: X, D: Yd * cm.cosT - Z * cm.sinT, U: Yd * cm.sinT + Z * cm.cosT };
   }
   function scr(c) { return { x: cm.cx + cm.F * c.X / c.D, y: cm.cy - cm.F * c.U / c.D }; }
@@ -1268,7 +1358,8 @@
   };
   function shapePts(pts, z) {
     return pts.map(function (p) {
-      return [car.x + (p[0] * cm.rx + p[1] * cm.fx) * CAR_SC, car.y + (p[0] * cm.ry + p[1] * cm.fy) * CAR_SC, z * CAR_SC];
+      var vs = CAR_SC * Math.max(1, cm.Hc / (is2D() ? 520 : HC * 1.5)), vx = Math.cos(phi), vy = Math.sin(phi);
+      return [car.x + (p[0] * -vy + p[1] * vx) * vs, car.y + (p[0] * vx + p[1] * vy) * vs, z * vs];
     });
   }
   function drawVehicle() {
@@ -1285,7 +1376,7 @@
 
   function drawBuilding(b, near) {
     var n = b.n, h = b.h, k, i;
-    var camx = car.x - cm.fx * cm.Bk, camy = car.y - cm.fy * cm.Bk;
+    var camx = fc.x - cm.fx * cm.Bk, camy = fc.y - cm.fy * cm.Bk;
     for (k = 0; k < n; k++) {
       var j = (k + 1) % n, ax = b.xs[k], ay = b.ys[k], bx = b.xs[j], by = b.ys[j];
       var dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
@@ -1368,37 +1459,33 @@
     cm.cx = side + (W - side) / 2; cm.cy = H * 0.5;
     if (!ORG || !car.has) { overlays(side, t); return; }
 
-    cm.F = Math.min(W * 1.25, H * 1.05);
-    cm.cosT = Math.cos(PITCH); cm.sinT = Math.sin(PITCH);
-    cm.fx = Math.cos(phi); cm.fy = Math.sin(phi); cm.rx = -cm.fy; cm.ry = cm.fx;
-    cm.Bk = HC / Math.tan(PITCH + Math.atan((H * 0.68 - cm.cy) / cm.F));
+    setupCamera();
+    var d2 = is2D(), zf = d2 ? 1 : view.z3, R = cm.R, i, j, k, c, x, y;
 
-    var i, j, k, c, x, y;
-    // griglia del terreno
-    var gs = 60, gx0 = Math.floor((car.x - VIEW) / gs) * gs, gy0 = Math.floor((car.y - VIEW) / gs) * gs;
-    ctx.beginPath();
-    for (x = gx0; x <= car.x + VIEW; x += gs) addPoly(seg(x, car.y - VIEW, x, car.y + VIEW, 0.7, 0));
-    for (y = gy0; y <= car.y + VIEW; y += gs) addPoly(seg(car.x - VIEW, y, car.x + VIEW, y, 0.7, 0));
-    ctx.globalAlpha = 0.09; ctx.fillStyle = TH.glow; ctx.fill(); ctx.globalAlpha = 1;
+    // terreno: colore di base e zone (parchi, campagna, industria, acqua)
+    ctx.beginPath(); pathXY([fc.x - R * 1.7, fc.x + R * 1.7, fc.x + R * 1.7, fc.x - R * 1.7], [fc.y - R * 1.7, fc.y - R * 1.7, fc.y + R * 1.7, fc.y + R * 1.7]);
+    ctx.fillStyle = GROUND_BASE; ctx.fill();
+    drawGround(R);
 
     // strade per classe
-    var vis = [[], [], []], V2 = VIEW + 80;
+    var vis = [[], [], []], V2 = R + 80 * Math.max(1, zf), wk = Math.max(1, cm.Hc / (d2 ? 650 : 420));
     for (c = 0; c < cellList.length; c++) {
       var rs = cellList[c].r;
       for (k = 0; k < rs.length; k++) {
         var rd = rs[k];
-        if (rd.maxx < car.x - V2 || rd.minx > car.x + V2 || rd.maxy < car.y - V2 || rd.miny > car.y + V2) continue;
+        if (rd.maxx < fc.x - V2 || rd.minx > fc.x + V2 || rd.maxy < fc.y - V2 || rd.miny > fc.y + V2) continue;
         vis[rd.cls].push(rd);
       }
     }
     var colors = [ROAD_MINOR, ROAD_MAJOR, ROAD_MOTORWAY];
     for (var cl = 0; cl < 3; cl++) {
+      if (cl === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
       ctx.beginPath();
       for (k = 0; k < vis[cl].length; k++) {
         var r = vis[cl][k];
         for (i = 0; i < r.xs.length - 1; i++) {
-          if (Math.abs(r.xs[i] - car.x) > V2 && Math.abs(r.ys[i] - car.y) > V2) continue;
-          addPoly(seg(r.xs[i], r.ys[i], r.xs[i + 1], r.ys[i + 1], r.w, 0));
+          if (Math.abs(r.xs[i] - fc.x) > V2 && Math.abs(r.ys[i] - fc.y) > V2) continue;
+          addPoly(seg(r.xs[i], r.ys[i], r.xs[i + 1], r.ys[i + 1], r.w * wk, 0));
         }
       }
       ctx.fillStyle = colors[cl]; ctx.fill();
@@ -1407,8 +1494,8 @@
     for (cl = 1; cl < 3; cl++) for (k = 0; k < vis[cl].length; k++) {
       var r2 = vis[cl][k];
       for (i = 0; i < r2.xs.length - 1; i++) {
-        if (Math.abs(r2.xs[i] - car.x) > VIEW && Math.abs(r2.ys[i] - car.y) > VIEW) continue;
-        addPoly(seg(r2.xs[i], r2.ys[i], r2.xs[i + 1], r2.ys[i + 1], 0.9, 0));
+        if (Math.abs(r2.xs[i] - fc.x) > R && Math.abs(r2.ys[i] - fc.y) > R) continue;
+        addPoly(seg(r2.xs[i], r2.ys[i], r2.xs[i + 1], r2.ys[i + 1], 0.9 * wk, 0));
       }
     }
     ctx.globalAlpha = 0.3; ctx.fillStyle = C.yel; ctx.fill(); ctx.globalAlpha = 1;
@@ -1416,22 +1503,33 @@
     // percorso
     if (route) drawRoute();
 
-    // oggetti in piedi, dal più lontano
+    // edifici
     var items = [], bl = [];
     for (c = 0; c < cellList.length; c++) {
       var bs = cellList[c].b;
       for (k = 0; k < bs.length; k++) {
-        var b = bs[k], ddx = b.cx - car.x, ddy = b.cy - car.y, lim = VIEW + b.r;
+        var b = bs[k], ddx = b.cx - fc.x, ddy = b.cy - fc.y, lim = R + b.r;
         if (ddx * ddx + ddy * ddy > lim * lim) continue;
+        if (d2) { bl.push({ D: 0, b: b }); continue; }
         var D = cam3(b.cx, b.cy, 0).D;
         if (D < -b.r - 10) continue;
         bl.push({ D: D, b: b });
       }
     }
-    bl.sort(function (a, b2) { return a.D - b2.D; });
-    if (bl.length > maxB) bl.length = maxB;
+    if (d2) {
+      // vista dall'alto: impronte piatte, tutte insieme
+      if (bl.length > 2500) bl.length = 2500;
+      ctx.beginPath();
+      for (k = 0; k < bl.length; k++) pathXY(bl[k].b.xs, bl[k].b.ys);
+      ctx.globalAlpha = 0.82; ctx.fillStyle = TH.roof; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.lineWidth = 1; ctx.strokeStyle = TH.edge; ctx.stroke();
+      bl = [];
+    } else {
+      bl.sort(function (a, b2) { return a.D - b2.D; });
+      if (bl.length > maxB) bl.length = maxB;
+    }
     // riflesso sull'asfalto sotto le case vicine
-    if (prefs.gloss) {
+    if (prefs.gloss && !d2) {
       ctx.beginPath();
       for (k = 0; k < Math.min(bl.length, 160); k++) {
         var gb = bl[k].b, wp = [];
@@ -1445,7 +1543,7 @@
     if (prefs.cams) {
       for (k = 0; k < camList.length; k++) {
         var cmr = camList[k];
-        if (Math.abs(cmr.x - car.x) > VIEW || Math.abs(cmr.y - car.y) > VIEW) continue;
+        if (Math.abs(cmr.x - fc.x) > R || Math.abs(cmr.y - fc.y) > R) continue;
         var onRoute = false;
         if (route) for (i = 0; i < route.cams.length; i++) if (route.cams[i].cam === cmr) { onRoute = true; break; }
         items.push({ D: cam3(cmr.x, cmr.y, 0).D, type: 'c', x: cmr.x, y: cmr.y, limit: cmr.limit, dim: route ? !onRoute : false, hot: !!(ahead && ahead.id === cmr.id) });
@@ -1459,27 +1557,76 @@
       else if (it.type === 'c') drawCam3(it, t);
       else drawDest(it.e);
     }
+    if (route && !d2 && view.free && view.z3 > 1.6) { ctx.globalAlpha = 0.9; drawRoute(); ctx.globalAlpha = 1; }   // da lontano il percorso resta sopra le case
     drawVehicle();
     overlays(side, t);
   }
-  function drawRoute() {
-    var pts = route.pts, n = pts.length - 1, i, R2 = (VIEW + 60);
-    function batch(w, from, to) {
-      ctx.beginPath();
-      for (i = from; i < to; i++) {
-        if (Math.abs(pts[i].x - car.x) > R2 && Math.abs(pts[i].y - car.y) > R2) continue;
-        addPoly(seg(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, w, 0));
+
+  /* Percorso e terreno */
+  function pathXY(xs, ys) {
+    var n = xs.length, i, dx, dy, Yd, D, U, X;
+    if (n < 3) return false;
+    for (i = 0; i < n; i++) {
+      dx = xs[i] - fc.x; dy = ys[i] - fc.y;
+      if ((dx * cm.fx + dy * cm.fy + cm.Bk) * cm.cosT + cm.Hc * cm.sinT < NEAR) {
+        var wp = []; for (i = 0; i < n; i++) wp.push([xs[i], ys[i], 0]);
+        return addPoly(wp);
       }
     }
-    batch(9.5, 0, n); ctx.fillStyle = bgA(0.9); ctx.fill();
-    batch(5.5, 0, n);
+    for (i = 0; i < n; i++) {
+      dx = xs[i] - fc.x; dy = ys[i] - fc.y;
+      Yd = dx * cm.fx + dy * cm.fy + cm.Bk; X = dx * cm.rx + dy * cm.ry;
+      D = Yd * cm.cosT + cm.Hc * cm.sinT; U = Yd * cm.sinT - cm.Hc * cm.cosT;
+      if (i) ctx.lineTo(cm.cx + cm.F * X / D, cm.cy - cm.F * U / D); else ctx.moveTo(cm.cx + cm.F * X / D, cm.cy - cm.F * U / D);
+    }
+    ctx.closePath();
+    return true;
+  }
+  function drawGround(R) {
+    var by = {}, c, k, g, q, R2 = R + 120;
+    for (c = 0; c < cellList.length; c++) {
+      g = cellList[c].g;
+      if (!g) continue;
+      for (k = 0; k < g.length; k++) {
+        q = g[k];
+        if (q.maxx < fc.x - R2 || q.minx > fc.x + R2 || q.maxy < fc.y - R2 || q.miny > fc.y + R2) continue;
+        (by[q.k] || (by[q.k] = [])).push(q);
+      }
+    }
+    for (k = 0; k < GROUND_ORDER.length; k++) {
+      var key = GROUND_ORDER[k], arr = by[key];
+      if (!arr) continue;
+      ctx.beginPath();
+      for (c = 0; c < arr.length; c++) pathXY(arr[c].xs, arr[c].ys);
+      ctx.fillStyle = GROUND_COL[key]; ctx.fill();
+      if (key === 'water') { ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(25,227,255,0.32)'; ctx.stroke(); }
+    }
+  }
+  function drawRoute() {
+    var pts = route.pts, n = pts.length - 1, i, R2 = cm.R + 60, wk = Math.max(1, cm.Hc / 420);
+    var i0 = 0, sx = pts[0].x, sy = pts[0].y;
+    if (state === 'nav' || state === 'arrived') {
+      // il tratto già percorso non si disegna: la scia parte esattamente sotto il veicolo
+      var pr = projectOnRoute(route, car.x, car.y, prog.idx, false), sp = pointAt(route, pr.d);
+      i0 = Math.min(n, pr.idx + 1); sx = sp.x; sy = sp.y;
+    }
+    function batch(w) {
+      ctx.beginPath();
+      var ax = sx, ay = sy;
+      for (i = i0; i <= n; i++) {
+        var bx = pts[i].x, by = pts[i].y;
+        if (!((ax < fc.x - R2 && bx < fc.x - R2) || (ax > fc.x + R2 && bx > fc.x + R2) || (ay < fc.y - R2 && by < fc.y - R2) || (ay > fc.y + R2 && by > fc.y + R2))) addPoly(seg(ax, ay, bx, by, w * wk, 0));
+        ax = bx; ay = by;
+      }
+    }
+    batch(9.5); ctx.fillStyle = bgA(0.9); ctx.fill();
+    batch(5.5);
     ctx.save(); ctx.shadowColor = C.cyan; ctx.shadowBlur = 16; ctx.fillStyle = C.cyan; ctx.fill(); ctx.restore();
-    if (prog.idx > 0 && state !== 'preview') { batch(5.5, 0, Math.min(n, prog.idx)); ctx.fillStyle = '#3a2f66'; ctx.fill(); }
   }
   function overlays(side, t) {
-    var gf = ctx.createLinearGradient(0, 0, 0, H * 0.5);
-    gf.addColorStop(0, bgA(0.92)); gf.addColorStop(0.3, bgA(0.62));
-    gf.addColorStop(0.62, 'rgba(62,8,74,0.22)'); gf.addColorStop(1, bgA(0));
+    var d2o = is2D(), gf = ctx.createLinearGradient(0, 0, 0, H * 0.5);
+    gf.addColorStop(0, bgA(d2o ? 0.7 : 0.92)); gf.addColorStop(0.3, bgA(d2o ? 0.3 : 0.62));
+    gf.addColorStop(0.62, d2o ? bgA(0.05) : 'rgba(62,8,74,0.22)'); gf.addColorStop(1, bgA(0));
     ctx.fillStyle = gf; ctx.fillRect(0, 0, W, H * 0.5);
     var gb = ctx.createLinearGradient(0, H - 220, 0, H);
     gb.addColorStop(0, bgA(0)); gb.addColorStop(1, bgA(0.9));
@@ -1498,6 +1645,98 @@
     }
   }
 
+
+  /* ---------- Esplorare la mappa: trascina, pizzica, ruota, 2D/3D ---------- */
+  var ptrs = {}, gest = null, rcBtn = $('recenterBtn'), modeBtn = $('modeBtn');
+  function pos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  function touch() { view.last = Date.now(); }
+  function enterFree() {
+    if (view.free) return;
+    view.free = true; view.fx = fc.x; view.fy = fc.y; view.rot = Math.atan2(cm.fy, cm.fx);
+    rcBtn.hidden = false;
+  }
+  function recenter() {
+    view.free = false; rcBtn.hidden = true; ensureData();
+  }
+  function fitRoute() {
+    if (!route || !ORG) return;
+    var b = route.bbox, a = toXY(b[0], b[1]), c2 = toXY(b[2], b[3]);
+    var mx = (a.x + c2.x) / 2, my = (a.y + c2.y) / 2, w = Math.abs(c2.x - a.x), h = Math.abs(c2.y - a.y);
+    view.free = true; view.fx = mx; view.fy = my; rcBtn.hidden = false;
+    if (is2D()) {
+      view.rot = -Math.PI / 2;
+      var hc = (Math.max(w * 1.3 / W, h * 1.3 / (H * 0.7)) + 0.0001) * (Math.min(W * 1.25, H * 1.05));
+      view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, hc / (HC * 6)));
+    } else {
+      var s0 = route.pts[0], e0 = route.pts[route.pts.length - 1];
+      view.rot = Math.atan2(e0.y - s0.y, e0.x - s0.x);
+      view.z3 = Math.min(ZMAX3, Math.max(1, Math.hypot(w, h) / 380));
+    }
+    touch();
+  }
+  function startGesture() {
+    var ids = Object.keys(ptrs);
+    if (ids.length === 1) { var p = ptrs[ids[0]]; gest = { t: 'pan', x0: p.x, y0: p.y, on: false, g0: null }; }
+    else if (ids.length >= 2) {
+      var a = ptrs[ids[0]], b = ptrs[ids[1]];
+      gest = { t: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, a0: Math.atan2(b.y - a.y, b.x - a.x), z0: curZoom(), r0: null, moved: false };
+    } else gest = null;
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    if (!ORG || !car.has) return;
+    try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+    ptrs[e.pointerId] = pos(e); startGesture(); touch();
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!ptrs[e.pointerId] || !gest) return;
+    ptrs[e.pointerId] = pos(e); touch();
+    var ids = Object.keys(ptrs);
+    if (gest.t === 'pan' && ids.length === 1) {
+      var p = ptrs[ids[0]];
+      if (!gest.on) {
+        if (Math.hypot(p.x - gest.x0, p.y - gest.y0) < 7) return;
+        gest.on = true; enterFree(); gest.g0 = groundAt(p.x, p.y);
+        return;
+      }
+      var g1 = groundAt(p.x, p.y);
+      if (gest.g0 && g1) { view.fx += gest.g0.x - g1.x; view.fy += gest.g0.y - g1.y; }
+    } else if (gest.t === 'pinch' && ids.length >= 2) {
+      var a = ptrs[ids[0]], b = ptrs[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (!view.free) { setZoom(gest.z0 * gest.d0 / d); return; }
+      if (!gest.g0) gest.g0 = groundAt(mid.x, mid.y);
+      if (gest.r0 === null) gest.r0 = view.rot;
+      setZoom(gest.z0 * gest.d0 / d);
+      view.rot = gest.r0 - (Math.atan2(b.y - a.y, b.x - a.x) - gest.a0);
+      setupCamera();
+      var g2 = groundAt(mid.x, mid.y);
+      if (gest.g0 && g2) { view.fx += gest.g0.x - g2.x; view.fy += gest.g0.y - g2.y; }
+    }
+  });
+  function endPtr(e) {
+    if (!ptrs[e.pointerId]) return;
+    delete ptrs[e.pointerId];
+    try { cv.releasePointerCapture(e.pointerId); } catch (x) {}
+    startGesture();
+  }
+  cv.addEventListener('pointerup', endPtr);
+  cv.addEventListener('pointercancel', endPtr);
+  cv.addEventListener('wheel', function (e) {
+    if (!ORG || !car.has) return;
+    e.preventDefault(); touch();
+    var f = Math.exp(e.deltaY * 0.0015);
+    if (view.free) {
+      var p = pos(e), g0 = groundAt(p.x, p.y);
+      setZoom(curZoom() * f); setupCamera();
+      var g1 = groundAt(p.x, p.y);
+      if (g0 && g1) { view.fx += g0.x - g1.x; view.fy += g0.y - g1.y; }
+    } else setZoom(curZoom() * f);
+  }, { passive: false });
+  $('zoomIn').addEventListener('click', function () { setZoom(curZoom() / 1.4); touch(); });
+  $('zoomOut').addEventListener('click', function () { setZoom(curZoom() * 1.4); touch(); });
+  rcBtn.addEventListener('click', recenter);
+  modeBtn.addEventListener('click', function () { prefs.view2d = !prefs.view2d; savePrefs(); applyPrefs(); touch(); });
+  function syncMode() { modeBtn.textContent = prefs.view2d ? '2D' : '3D'; modeBtn.setAttribute('aria-label', prefs.view2d ? 'Passa alla vista 3D' : 'Passa alla vista 2D'); }
+
   /* ---------- Ciclo principale ---------- */
   var last = performance.now(), hudT = 0, dataT = 0, limT = 0;
   function frame(now) {
@@ -1509,6 +1748,7 @@
       var diff = ((phiT - phi + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
       phi += diff * Math.min(1, dt * 4);
     }
+    if (view.free && state === 'nav' && !Object.keys(ptrs).length && Date.now() - view.last > 15000) recenter();
     var t0 = performance.now();
     draw(now);
     var cost = (performance.now() - t0) / 1000;
@@ -1539,6 +1779,7 @@
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
   window.__nightrider = {
-    info: function () { return { state: state, gps: gps, here: here, route: route && { total: route.total, man: route.man.length, cams: route.cams.length }, prog: prog, cells: cellList.length, cams: camList.length, speed: speedMs, limit: limitNow, maxB: maxB }; }
+    info: function () { return { state: state, gps: gps, here: here, route: route && { total: route.total, man: route.man.length, cams: route.cams.length }, prog: prog, cells: cellList.length, cams: camList.length, speed: speedMs, limit: limitNow, maxB: maxB, free: view.free, z3: view.z3, z2: view.z2, d2: is2D(), car: { x: car.x, y: car.y }, trail: route ? (function () { var pr = projectOnRoute(route, car.x, car.y, prog.idx, false); return { d: pr.d, dist: pr.dist }; })() : null }; },
+    pick: function (rs, type) { var o = prefs.routeType; prefs.routeType = type; var x = pickRoute(rs); prefs.routeType = o; return x; }
   };
 })();

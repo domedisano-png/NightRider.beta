@@ -63,6 +63,12 @@
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </header>
 
+  <div class="mapctl" id="mapctl">
+    <button type="button" class="round" id="zoomIn" aria-label="Avvicina la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" class="round" id="zoomOut" aria-label="Allontana la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+    <button type="button" class="round txt" id="modeBtn" aria-label="Cambia tra vista 2D e 3D">3D</button>
+    <button type="button" class="round" id="recenterBtn" aria-label="Torna alla mia posizione" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
+  </div>
   <div class="bottom">
     <section class="panel preview" id="previewPanel" aria-label="Riepilogo del percorso" hidden>
       <div class="pv-title" id="pvTitle"></div>
@@ -105,6 +111,7 @@
       <div class="fl" id="fl-route">Tipo di percorso</div>
       <div class="seg" role="radiogroup" aria-labelledby="fl-route">
         <button type="button" role="radio" data-key="routeType" data-val="fast">Più veloce</button>
+        <button type="button" role="radio" data-key="routeType" data-val="short">Più breve</button>
         <button type="button" role="radio" data-key="routeType" data-val="simple">Meno svolte</button>
       </div>
       <div style="margin-top:10px">
@@ -174,6 +181,7 @@
         <button type="button" role="radio" data-key="theme" data-val="cyan">Ciano</button>
         <button type="button" role="radio" data-key="theme" data-val="amber">Ambra</button>
       </div>
+      <button type="button" class="sw" role="switch" data-key="view2d"><span>Vista dall'alto (2D)</span><span class="track"><i></i></span></button>
       <div class="fl"><label for="tilt">Inclinazione della vista</label><output id="tiltOut">34°</output></div>
       <input type="range" id="tilt" data-key="tilt" min="0.35" max="1.25" step="0.05">
     </section>

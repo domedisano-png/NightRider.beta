@@ -292,3 +292,10 @@ input[type="range"] { width: 100%; accent-color: var(--cyan); margin: 4px 0; }
   .speed .num { font-size: 46px; }
   .tdist { font-size: 24px; }
 }
+
+/* Comandi della mappa */
+.mapctl { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-46%); display: flex; flex-direction: column; gap: 10px; z-index: 4; }
+.mapctl .round { width: 46px; height: 46px; }
+.mapctl .round.txt { font-weight: 800; font-size: 15px; letter-spacing: 0.02em; }
+#map { cursor: grab; }
+@media (min-width: 900px) and (min-aspect-ratio: 3/2) { .mapctl .round { width: 56px; height: 56px; } }
