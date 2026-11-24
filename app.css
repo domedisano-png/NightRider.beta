@@ -316,3 +316,7 @@ select { width: 100%; }
 @media (min-width: 900px) and (min-aspect-ratio: 3/2) { .alt .lbl { font-size: 16px; } }
 /* In anteprima i comandi della mappa salgono, così non coprono le schede dei percorsi */
 @media (max-aspect-ratio: 1/1) { #app[data-state="preview"] .mapctl { top: 27%; } }
+
+.btn:disabled { opacity: 0.4; pointer-events: none; }
+.pincard { margin-bottom: 8px; }
+.pincard .btn.primary { background: var(--yellow); border-color: var(--yellow); color: #0b0a14; }

@@ -70,6 +70,15 @@
     <button type="button" class="round" id="recenterBtn" data-i18n-aria="recenter" aria-label="Torna alla mia posizione" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
   </div>
   <div class="bottom">
+    <section class="panel pincard" id="pinCard" hidden>
+      <div class="pv-title" id="pinTitle"></div>
+      <div class="note" id="pinSub"></div>
+      <div class="btnrow">
+        <button type="button" class="btn primary" id="pinGo" data-i18n="goHere">Vai qui</button>
+        <button type="button" class="btn" id="pinStop" data-i18n="addStop">Aggiungi tappa</button>
+        <button type="button" class="btn" id="pinX" aria-label="Chiudi">✕</button>
+      </div>
+    </section>
     <section class="panel preview" id="previewPanel" data-i18n-aria="aPreview" aria-label="Riepilogo del percorso" hidden>
       <div class="pv-title" id="pvTitle"></div>
       <div class="alts" id="alts" role="radiogroup" data-i18n-aria="chooseRoute" aria-label="Scegli il percorso"></div>
@@ -190,6 +199,7 @@
     <section class="sec">
       <h3 data-i18n="sMap">Mappa</h3>
       <button type="button" class="sw" role="switch" data-key="cams"><span data-i18n="camsShow">Mostra gli autovelox</span><span class="track"><i></i></span></button>
+      <button type="button" class="sw" role="switch" data-key="roadNames"><span data-i18n="roadNames">Nomi delle vie</span><span class="track"><i></i></span></button>
       <button type="button" class="sw" role="switch" data-key="gloss"><span data-i18n="gloss">Riflessi sulle case</span><span class="track"><i></i></span></button>
       <div class="fl" id="fl-theme" data-i18n="themeLbl">Colore delle case</div>
       <div class="seg" role="radiogroup" aria-labelledby="fl-theme">

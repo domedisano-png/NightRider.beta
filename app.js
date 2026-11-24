@@ -21,9 +21,9 @@
   var STORE_KEY = 'nightrider.app.prefs';
   var LAST_KEY = 'nightrider.app.last';
   var HW = {
-    motorway: [2, 17], trunk: [2, 15], primary: [1, 14], secondary: [1, 12], tertiary: [1, 10],
-    unclassified: [0, 7], residential: [0, 6], living_street: [0, 5], service: [0, 3.5],
-    motorway_link: [2, 9], trunk_link: [1, 9], primary_link: [1, 9], secondary_link: [1, 8], tertiary_link: [0, 7]
+    motorway: [2, 17, 5], trunk: [2, 15, 4], primary: [1, 14, 3], secondary: [1, 12, 2], tertiary: [1, 10, 1],
+    unclassified: [0, 7, 0], residential: [0, 6, 0], living_street: [0, 5, 0], service: [0, 3.5, 0],
+    motorway_link: [2, 9, 5], trunk_link: [1, 9, 4], primary_link: [1, 9, 3], secondary_link: [1, 8, 2], tertiary_link: [0, 7, 1]
   };
   var HW_RE = '^(' + Object.keys(HW).join('|') + ')$';
 
@@ -33,7 +33,9 @@
     bg: tok('--bg', '#07060d'), cyan: tok('--cyan', '#19e3ff'), mag: tok('--magenta', '#ff2e88'),
     yel: tok('--yellow', '#f7e733'), ok: tok('--ok', '#3ddc97'), panel: tok('--panel', '#110c20')
   };
-  var ROAD_MINOR = '#271d4d', ROAD_MAJOR = '#4b3a94', ROAD_MOTORWAY = '#6d3fb8';
+  var ROAD_MINOR = '#2a2050', ROAD_MAJOR = '#3a2c6e', ROAD_MOTORWAY = '#473582';
+  // bordo neon per tipo di strada: autostrada fucsia, extraurbana principale ambra, statali ciano, provinciali viola chiaro
+  var EDGE = [null, 'rgba(150,120,255,0.55)', 'rgba(25,227,255,0.6)', '#19e3ff', '#ffb020', '#ff2bd6'];
   var LX = -0.6, LY = -0.8;
 
   var THEMES = {
@@ -59,7 +61,7 @@
     carIcon: 'arrow', carColor: '#f7e733',
     voice: true, voiceTurn: true, voiceCam: true, voiceName: '', voiceStyle: 'natural', volume: 0.9,
     cams: true, gloss: true, theme: 'fuchsia', tilt: 0.6, view2d: false,
-    lang: detectLang(), persona: 'cyber', voiceAll: false, ttKey: '',
+    lang: detectLang(), persona: 'cyber', roadNames: true, voiceAll: false, ttKey: '',
     units: 'km', wake: true, simMult: 3
   };
   var prefs = {};
@@ -271,7 +273,9 @@
       if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x;
       if (p.y < miny) miny = p.y; if (p.y > maxy) maxy = p.y;
     }
-    return { xs: xs, ys: ys, cls: def[0], w: def[1] * 1.25, ms: parseMax(t.maxspeed), minx: minx, maxx: maxx, miny: miny, maxy: maxy };
+    var li = 0, ll = 0;
+    for (i = 0; i < xs.length - 1; i++) { var sl = Math.hypot(xs[i + 1] - xs[i], ys[i + 1] - ys[i]); if (sl > ll) { ll = sl; li = i; } }
+    return { xs: xs, ys: ys, cls: def[0], k: def[2], w: def[1] * 1.25, nm: t.name || '', li: li, ll: ll, ms: parseMax(t.maxspeed), minx: minx, maxx: maxx, miny: miny, maxy: maxy };
   }
   function addCam(e) {
     var id = 'n' + e.id;
@@ -300,8 +304,8 @@
     return out;
   }
   var gen = 0, inflight = 0, diag = [], reqN = 0, srvBad = [0, 0];
-  var DATA_R = 430, CACHE_TTL = 14 * 24 * 3600 * 1000, CACHE_V = 2;
-  var KEEP = ['building', 'height', 'building:levels', 'highway', 'maxspeed', 'area', 'enforcement'];
+  var DATA_R = 430, CACHE_TTL = 14 * 24 * 3600 * 1000, CACHE_V = 3;
+  var KEEP = ['building', 'height', 'building:levels', 'highway', 'maxspeed', 'area', 'enforcement', 'name'];
 
   /* Cache sul dispositivo (IndexedDB): la seconda volta nella stessa zona la mappa è subito pronta */
   var idbP = null;
@@ -514,7 +518,7 @@
         var ln = lines[j], g2 = [];
         if (ln.length < 4) continue;
         for (k = 0; k < ln.length; k += 2) g2.push(pt(ln[k], ln[k + 1], R.ext));
-        els.push({ type: 'way', id: synthId++, tags: { highway: hw }, geometry: g2 });
+        els.push({ type: 'way', id: synthId++, tags: { highway: hw, name: rp.ref && !rp.name ? rp.ref : rp.name }, geometry: g2 });
       }
     }
     // zone del terreno (campagna, parchi, industria, acqua) come poligoni piatti
@@ -852,7 +856,7 @@
     for (i = 0; i < steps.length; i++) {
       var s = steps[i], m = s.maneuver || {}, d = acc * k;
       acc += s.distance || 0;
-      if (m.type === 'arrive') { man.push({ d: total, type: 'arrive', mod: m.modifier || '', name: dest.name }); continue; }
+      if (m.type === 'arrive') { if (i === steps.length - 1) man.push({ d: total, type: 'arrive', mod: m.modifier || '', name: dest.name }); continue; }
       if (!keepMan(m.type, m.modifier)) continue;
       man.push({ d: d, type: m.type, mod: m.modifier || '', name: s.name || '', exit: m.exit });
     }
@@ -878,17 +882,19 @@
     return best;
   }
   /* Percorsi: si interrogano tutti i server insieme e si sceglie il migliore tra tutte le alternative */
-  function getRoute(from, to, headingDeg) {
-    var coords = from.lon.toFixed(6) + ',' + from.lat.toFixed(6) + ';' + to.lon.toFixed(6) + ',' + to.lat.toFixed(6);
-    var base = '/route/v1/driving/' + coords + '?overview=full&geometries=geojson&steps=true&alternatives=3';
+  function getRoute(from, to, headingDeg, via) {
+    via = via || [];
+    var pts = [from].concat(via, [to]);
+    function coordStr(arr) { return arr.map(function (q) { return q.lon.toFixed(6) + ',' + q.lat.toFixed(6); }).join(';'); }
     var ex = []; if (prefs.avoidHighway) ex.push('motorway'); if (prefs.avoidToll) ex.push('toll');
-    function one(srv, extra) {
-      return fetchJson(srv + base + extra, null, 14000).then(function (j) {
+    function one(srv, cs, extra) {
+      var url = srv + '/route/v1/driving/' + cs + '?overview=full&geometries=geojson&steps=true&alternatives=' + (cs.split(';').length > 2 ? 'false' : '3') + extra;
+      return fetchJson(url, null, 14000).then(function (j) {
         if (!j || j.code !== 'Ok' || !j.routes || !j.routes.length) { var e = new Error('noroute'); e.fatal = !!(j && j.code === 'NoRoute'); throw e; }
         return j.routes;
       });
     }
-    function all(extra) {
+    function all(cs, extra) {
       return new Promise(function (resolve, reject) {
         var pending = OSRM.length, routes = [], fatal = 0, firstOk = 0, timer = null, finished = false, lastErr = null;
         function finish() {
@@ -896,16 +902,16 @@
           if (routes.length) resolve({ routes: routes }); else { var e = lastErr || new Error('route'); e.fatal = fatal === OSRM.length; reject(e); }
         }
         OSRM.forEach(function (srv) {
-          one(srv, extra).then(function (rs) {
+          one(srv, cs, extra).then(function (rs) {
             routes = routes.concat(rs);
             if (!firstOk) { firstOk = Date.now(); timer = setTimeout(finish, 1200); }
           }, function (e) { lastErr = e; if (e && e.fatal) fatal++; }).then(function () { if (--pending === 0) finish(); });
         });
       });
     }
-    var bear = headingDeg != null ? '&bearings=' + Math.round(headingDeg) + ',60;' : '';
+    function bearFix() { var arr = [Math.round(headingDeg) + ',60']; for (var i = 1; i < pts.length; i++) arr.push(''); return '&bearings=' + arr.join(';'); }
     function attempt(extra) {
-      return bear ? all(extra + bear).then(null, function (e) { return all(extra); }) : all(extra);
+      return headingDeg != null ? all(coordStr(pts), extra + bearFix()).then(null, function () { return all(coordStr(pts), extra); }) : all(coordStr(pts), extra);
     }
     var mainP = attempt(ex.length ? '&exclude=' + ex.join(',') : '').then(function (j) { return { data: j, dropped: false }; }, function (e) {
       if (ex.length && !e.fatal) return attempt('').then(function (j) { return { data: j, dropped: true }; });
@@ -914,19 +920,35 @@
     var nohwP = ex.indexOf('motorway') >= 0 ? Promise.resolve(null) : attempt('&exclude=motorway').then(function (j) {
       j.routes.forEach(function (r) { r._nohw = true; }); return j.routes;
     }, function () { return null; });
-    var ttP = prefs.ttKey ? tomtomRoutes(from, to).catch(function () { return null; }) : Promise.resolve(null);
+    var ttP = prefs.ttKey ? tomtomRoutes(from, to, via).catch(function () { return null; }) : Promise.resolve(null);
     return Promise.all([mainP.then(function (r) { return r; }, function (e) { return { err: e }; }), nohwP, ttP]).then(function (a) {
       var res = a[0];
-      if (a[2] && a[2].length) return { data: { routes: a[2] }, dropped: false, traffic: true };
+      if (a[2] && a[2].length > 1) return { data: { routes: a[2] }, dropped: false, traffic: true };
       if (res.err) throw res.err;
       if (a[1]) res.data.routes = res.data.routes.concat(a[1]);
-      return res;
+      if (a[2] && a[2].length) { res.data.routes = res.data.routes.concat(a[2]); }
+      // se i percorsi davvero diversi sono meno di 3, se ne cercano altri passando da un punto laterale
+      var uniq = distinctRoutes(res.data.routes);
+      if (uniq.length >= 3) return res;
+      var base = uniq[0], g = base.geometry.coordinates, m = Math.floor(g.length / 2), p0 = g[Math.max(0, m - 2)], p1 = g[Math.min(g.length - 1, m + 2)];
+      var cl = Math.cos(g[m][1] * Math.PI / 180), dxm = (p1[0] - p0[0]) * cl, dym = p1[1] - p0[1], nl = Math.hypot(dxm, dym) || 1;
+      var off = Math.max(500, Math.min(14000, base.distance * 0.2)) / 111320, tasks = [];
+      [1, -1].forEach(function (sd) {
+        var vp = { lon: g[m][0] + (-dym / nl) * off * sd / cl, lat: g[m][1] + (dxm / nl) * off * sd };
+        var arr = [from, vp].concat(via, [to]);
+        tasks.push(all(coordStr(arr), '').then(function (j) { j.routes.forEach(function (r) { r._via = true; }); return j.routes; }, function () { return []; }));
+      });
+      return Promise.all(tasks).then(function (extra) {
+        extra.forEach(function (rs) { res.data.routes = res.data.routes.concat(rs); });
+        return res;
+      });
     });
   }
   /* TomTom (opzionale, con la chiave gratuita dell'utente): percorsi con traffico, convertiti nel formato OSRM */
   var TT_MAN = { DEPART: ['depart', ''], ARRIVE: ['arrive', ''], ARRIVE_LEFT: ['arrive', 'left'], ARRIVE_RIGHT: ['arrive', 'right'], TURN_LEFT: ['turn', 'left'], TURN_RIGHT: ['turn', 'right'], SHARP_LEFT: ['turn', 'sharp left'], SHARP_RIGHT: ['turn', 'sharp right'], BEAR_LEFT: ['turn', 'slight left'], BEAR_RIGHT: ['turn', 'slight right'], KEEP_LEFT: ['fork', 'left'], KEEP_RIGHT: ['fork', 'right'], MAKE_UTURN: ['turn', 'uturn'], ENTER_MOTORWAY: ['on ramp', ''], ENTER_FREEWAY: ['on ramp', ''], TAKE_EXIT: ['off ramp', ''], ROUNDABOUT_CROSS: ['roundabout', 'straight'], ROUNDABOUT_RIGHT: ['roundabout', 'right'], ROUNDABOUT_LEFT: ['roundabout', 'left'], ROUNDABOUT_BACK: ['roundabout', 'uturn'] };
-  function tomtomRoutes(from, to) {
-    var url = 'https://api.tomtom.com/routing/1/calculateRoute/' + from.lat.toFixed(6) + ',' + from.lon.toFixed(6) + ':' + to.lat.toFixed(6) + ',' + to.lon.toFixed(6) +
+  function tomtomRoutes(from, to, via) {
+    var wp = [from].concat(via || [], [to]).map(function (q) { return q.lat.toFixed(6) + ',' + q.lon.toFixed(6); }).join(':');
+    var url = 'https://api.tomtom.com/routing/1/calculateRoute/' + wp +
       '/json?key=' + encodeURIComponent(prefs.ttKey) + '&traffic=true&maxAlternatives=2&instructionsType=coded&travelMode=car&routeType=fastest&computeTravelTimeFor=all';
     var t0 = Date.now();
     return fetchJson(url, null, 12000).then(function (j) {
@@ -959,12 +981,16 @@
     }
     return hit / k >= 0.88;
   }
-  function makeAlts(routes, dest) {
+  function distinctRoutes(routes) {
     var sorted = routes.slice().sort(function (a, b) { return a.duration - b.duration; }), uniq = [];
     sorted.forEach(function (r) {
       for (var i = 0; i < uniq.length; i++) if (sameGeom(r, uniq[i])) { return; }
       uniq.push(r);
     });
+    return uniq;
+  }
+  function makeAlts(routes, dest) {
+    var uniq = distinctRoutes(routes);
     var fastest = uniq[0], shortest = uniq[0], simple = uniq[0], nohw = null;
     uniq.forEach(function (r) {
       if (r.distance < shortest.distance) shortest = r;
@@ -998,6 +1024,8 @@
   function renderAlts() {
     var box = $('alts'); if (!box) return;
     box.innerHTML = '';
+    var lock = state === 'preview' && alts.list.length > 1 && alts.sel < 0;
+    $('goBtn').disabled = lock; $('simBtn').disabled = lock;
     if (state !== 'preview' || alts.list.length < 2) { box.hidden = true; return; }
     box.hidden = false;
     alts.list.forEach(function (a, i) {
@@ -1020,9 +1048,10 @@
     alts.sel = i; setRoute(alts.list[i].rt); showMeta(); routeCams(route); renderAlts();
   }
   function showMeta() {
-    $('pvTitle').textContent = route.dest.name;
-    $('pvMeta').textContent = fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + ' · ' + t('lArr') + ' ' + clockAfter(route.dur);
+    $('pvTitle').textContent = route.dest.name + (stops.length ? ' (+' + stops.length + ' ' + t('stopLbl').toLowerCase() + ')' : '');
+    $('pvMeta').textContent = alts.list.length > 1 && alts.sel < 0 ? t('pickRoute') : fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + ' · ' + t('lArr') + ' ' + clockAfter(route.dur);
   }
+  var camDone = {};
   function routeCams(rt) {
     if (rt._camsReq) return Promise.resolve();
     rt._camsReq = true;
@@ -1031,7 +1060,7 @@
       var ll = toLL(rt.pts[i].x, rt.pts[i].y), ci = Math.floor(ll.lon / DN), cj = Math.floor(ll.lat / DL), key = ci + ',' + cj;
       if (!cellsSet[key]) { cellsSet[key] = 1; list.push([ci, cj]); }
     }
-    list = list.slice(0, 10);
+    list = list.filter(function (c) { var k = c[0] + ',' + c[1]; if (camDone[k]) return false; camDone[k] = 1; return true; }).slice(0, 10);
     var pad = 0.002, idx = 0;
     function worker() {
       if (idx >= list.length) return Promise.resolve();
@@ -1039,7 +1068,7 @@
       var q = '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed)$"](' + bb + '););out body;';
       return overpass(q, 'autovelox').then(function (j) { parseOsm(j); attachCams(rt); }, function () {}).then(worker);
     }
-    return Promise.all([worker(), worker()]).then(function () { attachCams(rt); renderAlts(); });
+    return Promise.all([worker(), worker()]).then(function () { attachCams(rt); alts.list.forEach(function (a) { attachCams(a.rt); }); renderAlts(); });
   }
   function attachCams(rt) {
     rt.cams = [];
@@ -1077,7 +1106,7 @@
   var state = 'idle';
   var gps = null, gpsErr = '', here = null, demoPos = false;
   var car = { x: 0, y: 0, has: false }, tgt = { x: 0, y: 0 }, phi = -Math.PI / 2, phiT = -Math.PI / 2;
-  var speedMs = 0, lastFix = null, lastSave = 0;
+  var speedMs = 0, lastFix = null, lastSave = 0, tgtD = 0, tgtSnap = false, fixT = 0;
   var route = null, prog = { d: 0, idx: 0, dist: 0 }, offSince = 0, lastReroute = 0, rerouting = false;
   var sim = { active: false, running: true, d: 0, timer: null };
   var spoken = {};
@@ -1103,15 +1132,17 @@
       if (pr.dist < 45) {
         prog.d = pr.d; offSince = 0;
         var pa = pointAt(route, pr.d);
-        if (pr.dist < 30) { tgt.x = pa.x; tgt.y = pa.y; snapped = true; }
+        if (pr.dist < 30) { tgt.x = pa.x; tgt.y = pa.y; snapped = true; tgtD = pr.d; }
         phiT = Math.atan2(pa.hy, pa.hx);
       } else if (!sim.active) {
         if (!offSince) offSince = now;
         if (now - offSince > 4000 && now - lastReroute > 12000) reroute();
       }
+      if (stops.length) checkStops();
       if (route.total - prog.d < 25) arrive();
     }
     if (!snapped) { tgt.x = p.x; tgt.y = p.y; }
+    tgtSnap = snapped; fixT = performance.now();
     if (hd != null && (speedMs > 1.2 || f.sim) && !(snapped && route)) phiT = bearingToPhi(hd);
     if (!car.has) { car.x = tgt.x; car.y = tgt.y; car.has = true; phi = phiT; }
     if (!f.sim && now - lastSave > 10000) { lastSave = now; try { localStorage.setItem(LAST_KEY, JSON.stringify({ lat: f.lat, lon: f.lon })); } catch (e) {} }
@@ -1136,7 +1167,7 @@
     if (!navigator.geolocation) { gpsErr = 'nosupport'; $('demoBtn').hidden = false; return; }
     navigator.geolocation.watchPosition(onFix, onGeoErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
   }
-  function resetData() { gen++; cells = {}; cellList = []; queue = []; SEEN = {}; CAMS = {}; camList = []; limWays = []; xcells = {}; xqueue = []; myAdded = false; }
+  function resetData() { camDone = {}; gen++; cells = {}; cellList = []; queue = []; SEEN = {}; CAMS = {}; camList = []; limWays = []; xcells = {}; xqueue = []; myAdded = false; }
 
   /* ---------- Navigazione ---------- */
   var toastTimer = null;
@@ -1159,20 +1190,93 @@
     if (speedMs < 2.5 || sim.active) return null;
     return ((Math.atan2(Math.cos(phiT), -Math.sin(phiT)) * 180 / Math.PI) % 360 + 360) % 360;
   }
+  var stops = [], pin = null;
+  function showAlts(res, dest) {
+    var list = makeAlts(res.data.routes, dest);
+    alts = { list: list, sel: list.length > 1 ? -1 : 0 };
+    setRoute(list[0].rt);
+    $('pvNote').textContent = (res.dropped ? t('dropped') : '') + (list.length < 2 ? t('oneRoute') + ' ' : '') + (res.traffic ? t('withTraffic') : t('noTraffic'));
+    showPreview();
+    routeCams(route);
+    if (list.length > 1) list.forEach(function (a) { routeCams(a.rt); });
+  }
   function chooseDest(r) {
     if (!here) { toast(t('needPos')); $('demoBtn').hidden = false; return; }
     var dest = { name: r.name, sub: r.sub, lat: r.lat, lon: r.lon };
+    stops = []; closePin();
     results.innerHTML = ''; $('q').value = r.name;
     showResMsg(t('calcRoute'));
-    getRoute(here, dest, movingHeading()).then(function (res) {
-      alts = { list: makeAlts(res.data.routes, dest), sel: 0 };
-      setRoute(alts.list[0].rt);
-      $('pvNote').textContent = (res.dropped ? t('dropped') : '') + (res.traffic ? t('withTraffic') : t('noTraffic'));
-      showPreview();
-      routeCams(route);
+    getRoute(here, dest, movingHeading(), []).then(function (res) {
+      showAlts(res, dest);
     }, function (e) {
       showResMsg(e && e.fatal ? t('noRoute') : t('srvDown'));
     });
+  }
+  /* Tappa aggiunta con il dito: ricalcolo con i punti intermedi */
+  function recalcStops() {
+    if (!route || !here) return;
+    var dest = route.dest, wasNav = state === 'nav';
+    toast(t('calcStop'));
+    getRoute(here, dest, wasNav ? movingHeading() : null, stops.slice()).then(function (res) {
+      if (wasNav) {
+        var list = makeAlts(res.data.routes, dest);
+        alts = { list: [], sel: 0 };
+        setRoute(list[0].rt); routeCams(route);
+      } else showAlts(res, dest);
+    }, function () { toast(t('srvDown')); stops.pop(); });
+  }
+  function reverseGeo(lat, lon) {
+    var lg = ['en', 'de', 'fr'].indexOf(prefs.lang) >= 0 ? prefs.lang : 'en';
+    return fetchJson('https://photon.komoot.io/reverse?lon=' + lon.toFixed(6) + '&lat=' + lat.toFixed(6) + '&lang=' + lg, null, 7000).then(function (j) {
+      var f = j && j.features && j.features[0], pr = f && f.properties;
+      if (!pr) throw new Error('none');
+      var nm = pr.name || ((pr.street || '') + (pr.housenumber ? ' ' + pr.housenumber : '')).trim() || pr.city || pr.district || '';
+      var sub = [pr.city || pr.town || pr.village || '', pr.state || ''].filter(function (x) { return x && x !== nm; }).join(', ');
+      if (!nm) throw new Error('none');
+      return { name: nm, sub: sub };
+    });
+  }
+  function screenToLL(sx, sy) {
+    if (world.on) {
+      if (world.z < WZ_GLOBE) return null;
+      wXfWorld();
+      var wp = 256 * Math.pow(2, WX.z), ex = sx - WX.sx, ey = sy - WX.sy, ca = Math.cos(WX.ang), sa = Math.sin(WX.ang);
+      var u = ex * ca + ey * sa, v = -ex * sa + ey * ca;
+      return { lat: latOfMy(Math.max(0.001, Math.min(0.999, WX.my + v / wp))), lon: lonOfMx(WX.mx + u / wp) };
+    }
+    if (worldBlend() >= 0.5) { wXfLocal(); var wp2 = 256 * Math.pow(2, WX.z), ex2 = sx - WX.sx, ey2 = sy - WX.sy, c2 = Math.cos(WX.ang), s2 = Math.sin(WX.ang); return { lat: latOfMy(WX.my + (-ex2 * s2 + ey2 * c2) / wp2), lon: lonOfMx(WX.mx + (ex2 * c2 + ey2 * s2) / wp2) }; }
+    var g = groundAt(sx, sy);
+    return g ? toLL(g.x, g.y) : null;
+  }
+  function openPin(ll) {
+    pin = { lat: ll.lat, lon: ll.lon, name: t('pinPlace'), sub: ll.lat.toFixed(4) + ', ' + ll.lon.toFixed(4) };
+    $('pinTitle').textContent = pin.name; $('pinSub').textContent = pin.sub;
+    $('pinStop').hidden = !(route && (state === 'preview' || state === 'nav'));
+    $('pinCard').hidden = false;
+    var mine = pin;
+    reverseGeo(ll.lat, ll.lon).then(function (r) {
+      if (pin !== mine) return;
+      pin.name = r.name; pin.sub = r.sub || pin.sub; $('pinTitle').textContent = pin.name; $('pinSub').textContent = pin.sub;
+    }, function () {});
+  }
+  function closePin() { pin = null; var c = $('pinCard'); if (c) c.hidden = true; }
+  $('pinX').addEventListener('click', closePin);
+  $('pinGo').addEventListener('click', function () { if (pin) chooseDest({ name: pin.name, sub: pin.sub, lat: pin.lat, lon: pin.lon }); });
+  $('pinStop').addEventListener('click', function () {
+    if (!pin || !route) return;
+    stops.push({ lat: pin.lat, lon: pin.lon, name: pin.name });
+    closePin(); recalcStops();
+  });
+  function checkStops() {
+    for (var i = 0; i < stops.length; i++) {
+      var q = toXY(stops[i].lat, stops[i].lon);
+      if (Math.hypot(q.x - car.x, q.y - car.y) < 40) {
+        var nm = stops[i].name; stops.splice(i, 1);
+        toast(t('stopReached') + ': ' + nm);
+        if (prefs.voice) speak(t('stopReached') + '.');
+        return;
+      }
+    }
   }
   function setRoute(rt) {
     route = rt; prog = { d: 0, idx: 0, dist: 0 }; spoken = {}; offSince = 0;
@@ -1187,6 +1291,7 @@
   }
   function startNav(simMode) {
     if (!route) return;
+    if (alts.list.length > 1 && alts.sel < 0) { toast(t('pickRoute')); return; }
     unlockSpeech();
     sim.active = !!simMode;
     prog = { d: 0, idx: 0, dist: 0 }; spoken = {}; offSince = 0;
@@ -1215,7 +1320,7 @@
   }
   function endNav() {
     clearInterval(sim.timer); sim.active = false;
-    route = null; prog = { d: 0, idx: 0, dist: 0 };
+    route = null; prog = { d: 0, idx: 0, dist: 0 }; stops = []; closePin(); alts = { list: [], sel: 0 };
     requestWake(false);
     try { if (synth) synth.cancel(); } catch (e) {}
     setState('idle');
@@ -1485,7 +1590,7 @@
 
   $('goBtn').addEventListener('click', function () { startNav(!gps); });
   $('simBtn').addEventListener('click', function () { startNav(true); });
-  $('cancelBtn').addEventListener('click', function () { route = null; alts = { list: [], sel: 0 }; setState('idle'); renderAlts(); });
+  $('cancelBtn').addEventListener('click', function () { stops = []; closePin(); route = null; alts = { list: [], sel: 0 }; setState('idle'); renderAlts(); });
   $('endBtn').addEventListener('click', endNav);
   els.playBtn.addEventListener('click', function () { sim.running = !sim.running; updatePlayBtn(); });
   $('demoBtn').addEventListener('click', function () {
@@ -1497,10 +1602,10 @@
   /* ---------- Camera 3D ---------- */
   var cv = $('map'), ctx = cv.getContext('2d'), app = $('app');
   var W = 0, H = 0, dpr = 1, PITCH = prefs.tilt;
-  var cm = { Bk: 60, F: 500, cx: 0, cy: 0, cosT: 1, sinT: 0, fx: 1, fy: 0, rx: 0, ry: 1, Hc: HC, T: 0.6, R: VIEW };
+  var cm = { s: 0, Bk: 60, F: 500, cx: 0, cy: 0, cosT: 1, sinT: 0, fx: 1, fy: 0, rx: 0, ry: 1, Hc: HC, T: 0.6, R: VIEW };
   var fc = { x: 0, y: 0 };                                   // punto guardato dalla camera
   var view = { free: false, fx: 0, fy: 0, rot: 0, z3: 1, z2: 1, last: 0 };   // esplorazione con le dita
-  var ZMIN3 = 0.4, ZMAX3 = 7, ZMIN2 = 0.12, ZMAX2 = 14;
+  var ZMIN3 = 0.4, ZMAX3 = 84, ZMIN2 = 0.12, ZMAX2 = 14;
   function is2D() { return !!prefs.view2d; }
   function setZoom(z) {
     if (world.on) {
@@ -1512,18 +1617,21 @@
     else { if (z > ZMAX3 && ORG && car.has) { enterWorld(); return; } view.z3 = Math.min(ZMAX3, Math.max(ZMIN3, z)); }
   }
   function curZoom() { return world.on ? WK / Math.pow(2, world.z) : is2D() ? view.z2 : view.z3; }
+  function smooth01(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
   function setupCamera() {
-    var d2 = is2D();
+    var d2 = is2D(), sf = d2 ? 1 : smooth01((view.z3 - 2) / 5);   // in 3D, allontanandosi la vista si raddrizza fino a diventare dall'alto
+    cm.s = sf;
     cm.Hc = d2 ? HC * 6 * view.z2 : HC * view.z3;
-    cm.T = d2 ? Math.PI / 2 : PITCH;
+    cm.T = sf > 0.995 ? Math.PI / 2 : PITCH + (Math.PI / 2 - PITCH) * sf;
     cm.cosT = Math.cos(cm.T); cm.sinT = Math.sin(cm.T);
     var cp = view.free ? view.rot : phi;
     cm.fx = Math.cos(cp); cm.fy = Math.sin(cp); cm.rx = -cm.fy; cm.ry = cm.fx;
     fc.x = view.free ? view.fx : car.x; fc.y = view.free ? view.fy : car.y;
     cm.F = Math.min(W * 1.25, H * 1.05);
     var off = (H * 0.68 - cm.cy) / cm.F;
-    cm.Bk = d2 ? -off * cm.Hc : cm.Hc / Math.tan(cm.T + Math.atan(off));
-    cm.R = d2 ? Math.hypot(W, H) / cm.F * cm.Hc * 0.7 : VIEW * view.z3;
+    cm.Bk = sf > 0.995 ? -off * cm.Hc : cm.Hc / Math.tan(cm.T + Math.atan(off));
+    var rFlat = Math.hypot(W, H) / cm.F * cm.Hc * 0.7;
+    cm.R = d2 ? rFlat : (VIEW * view.z3) * (1 - sf) + rFlat * sf;
   }
   /* punto del terreno sotto un punto dello schermo */
   function groundAt(sx, sy) {
@@ -1593,7 +1701,7 @@
   };
   function shapePts(pts, z) {
     return pts.map(function (p) {
-      var vs = CAR_SC * Math.max(1, cm.Hc / (is2D() ? 520 : HC * 1.5)), vx = Math.cos(phi), vy = Math.sin(phi);
+      var vs = CAR_SC * Math.max(1, cm.Hc / (HC * 1.5 + (520 - HC * 1.5) * cm.s)), vx = Math.cos(phi), vy = Math.sin(phi);
       return [car.x + (p[0] * -vy + p[1] * vx) * vs, car.y + (p[0] * vx + p[1] * vy) * vs, z * vs];
     });
   }
@@ -1610,7 +1718,7 @@
   }
 
   function drawBuilding(b, near) {
-    var n = b.n, h = b.h, k, i;
+    var n = b.n, h = b.h * (1 - cm.s * 0.97), k, i;
     var camx = fc.x - cm.fx * cm.Bk, camy = fc.y - cm.fy * cm.Bk;
     for (k = 0; k < n; k++) {
       var j = (k + 1) % n, ax = b.xs[k], ay = b.ys[k], bx = b.xs[j], by = b.ys[j];
@@ -1695,58 +1803,57 @@
     if (!ORG || !car.has) { overlays(side, t); return; }
 
     setupCamera();
-    if (world.on) { drawWorld(t); overlays(side, t); return; }
-    var d2 = is2D(), zf = d2 ? 1 : view.z3, R = cm.R, i, j, k, c, x, y;
+    if (world.on) { drawWorld(t); drawPins(); overlays(side, t); return; }
+    var wb = worldBlend();
+    if (wb >= 1) { drawWorldOverlay(t, 1); drawPins(); overlays(side, t); return; }
+    var d2 = cm.s > 0.97, zf = d2 ? 1 : view.z3, R = cm.R, i, j, k, c, x, y;
 
     // terreno: colore di base e zone (parchi, campagna, industria, acqua)
     ctx.beginPath(); pathXY([fc.x - R * 1.7, fc.x + R * 1.7, fc.x + R * 1.7, fc.x - R * 1.7], [fc.y - R * 1.7, fc.y - R * 1.7, fc.y + R * 1.7, fc.y + R * 1.7]);
     ctx.fillStyle = GROUND_BASE; ctx.fill();
     drawGround(R);
 
-    // strade per classe
-    var vis = [[], [], []], V2 = R + 80 * Math.max(1, zf), wk = Math.max(1, cm.Hc / (d2 ? 650 : 420));
+    // strade per tipo: base scura come prima, bordo esterno al neon in base alla classe
+    var vis = [[], [], [], [], [], []], V2 = R + 80 * Math.max(1, zf), wk = Math.max(1, cm.Hc / (420 + 230 * cm.s));
     for (c = 0; c < cellList.length; c++) {
       var rs = cellList[c].r;
       for (k = 0; k < rs.length; k++) {
         var rd = rs[k];
         if (rd.maxx < fc.x - V2 || rd.minx > fc.x + V2 || rd.maxy < fc.y - V2 || rd.miny > fc.y + V2) continue;
-        vis[rd.cls].push(rd);
+        vis[rd.k].push(rd);
       }
     }
-    var colors = [ROAD_MINOR, ROAD_MAJOR, ROAD_MOTORWAY];
-    for (var cl = 0; cl < 3; cl++) {
-      if (cl === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
-      if (cl > 0) {                               // contorno scuro: stacca le vie principali dallo sfondo
-        ctx.beginPath();
-        for (k = 0; k < vis[cl].length; k++) {
-          var rc = vis[cl][k];
-          for (i = 0; i < rc.xs.length - 1; i++) {
-            if (Math.abs(rc.xs[i] - fc.x) > V2 && Math.abs(rc.ys[i] - fc.y) > V2) continue;
-            addPoly(seg(rc.xs[i], rc.ys[i], rc.xs[i + 1], rc.ys[i + 1], rc.w * wk * 1.4, 0));
-          }
-        }
-        ctx.fillStyle = 'rgba(8,4,22,0.85)'; ctx.fill();
-      }
+    var colors = [ROAD_MINOR, ROAD_MAJOR, ROAD_MAJOR, ROAD_MAJOR, ROAD_MOTORWAY, ROAD_MOTORWAY];
+    function roadPath(list, mul) {
       ctx.beginPath();
-      for (k = 0; k < vis[cl].length; k++) {
-        var r = vis[cl][k];
-        for (i = 0; i < r.xs.length - 1; i++) {
-          if (Math.abs(r.xs[i] - fc.x) > V2 && Math.abs(r.ys[i] - fc.y) > V2) continue;
-          addPoly(seg(r.xs[i], r.ys[i], r.xs[i + 1], r.ys[i + 1], r.w * wk, 0));
+      for (var kk = 0; kk < list.length; kk++) {
+        var r = list[kk];
+        for (var ii = 0; ii < r.xs.length - 1; ii++) {
+          if (Math.abs(r.xs[ii] - fc.x) > V2 && Math.abs(r.ys[ii] - fc.y) > V2) continue;
+          addPoly(seg(r.xs[ii], r.ys[ii], r.xs[ii + 1], r.ys[ii + 1], r.w * wk * mul, 0));
         }
       }
-      ctx.fillStyle = colors[cl];
-      if (cl === 2) { ctx.save(); ctx.shadowColor = '#b04bff'; ctx.shadowBlur = 10; ctx.fill(); ctx.restore(); } else ctx.fill();
+    }
+    for (var kd = 0; kd < 6; kd++) {
+      if (kd === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
+      if (!vis[kd].length) continue;
+      if (kd > 0) {
+        roadPath(vis[kd], 1.55);
+        ctx.fillStyle = EDGE[kd];
+        if (kd >= 3) { ctx.save(); ctx.shadowColor = EDGE[kd]; ctx.shadowBlur = 9; ctx.fill(); ctx.restore(); } else ctx.fill();
+      }
+      roadPath(vis[kd], 1);
+      ctx.fillStyle = colors[kd]; ctx.fill();
     }
     ctx.beginPath();
-    for (cl = 1; cl < 3; cl++) for (k = 0; k < vis[cl].length; k++) {
-      var r2 = vis[cl][k];
+    for (kd = 3; kd < 6; kd++) for (k = 0; k < vis[kd].length; k++) {
+      var r2 = vis[kd][k];
       for (i = 0; i < r2.xs.length - 1; i++) {
         if (Math.abs(r2.xs[i] - fc.x) > R && Math.abs(r2.ys[i] - fc.y) > R) continue;
         addPoly(seg(r2.xs[i], r2.ys[i], r2.xs[i + 1], r2.ys[i + 1], 0.9 * wk, 0));
       }
     }
-    ctx.globalAlpha = 0.38; ctx.fillStyle = C.yel; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.3; ctx.fillStyle = C.yel; ctx.fill(); ctx.globalAlpha = 1;
 
     // percorso
     if (route) drawRoute();
@@ -1806,10 +1913,60 @@
       else drawDest(it.e);
     }
     if (route && !d2 && view.free && view.z3 > 1.6) { ctx.globalAlpha = 0.9; drawRoute(); ctx.globalAlpha = 1; }   // da lontano il percorso resta sopra le case
+    drawRoadNames(vis);
     drawVehicle();
+    if (wb > 0) drawWorldOverlay(t, wb);
+    drawPins();
     overlays(side, t);
   }
 
+  /* Nomi delle vie: seguono la direzione della strada, solo dove c'è spazio e senza sovrapporsi */
+  function drawRoadNames(vis) {
+    if (!prefs.roadNames || cm.Hc > 2200) return;
+    var minK = cm.Hc < 450 ? 0 : cm.Hc < 900 ? 1 : 2, cands = [], kd, k, i;
+    for (kd = 5; kd >= minK; kd--) for (k = 0; k < vis[kd].length && cands.length < 220; k++) if (vis[kd][k].nm && vis[kd][k].ll > 25) cands.push(vis[kd][k]);
+    ctx.save();
+    ctx.font = '700 ' + (cm.Hc < 450 ? 12 : 11) + 'px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    var placed = [], n = 0;
+    for (i = 0; i < cands.length && n < 40; i++) {
+      var r = cands[i], li = r.li, ax = r.xs[li], ay = r.ys[li], bx = r.xs[li + 1], by = r.ys[li + 1];
+      var ca = cam3(ax, ay, 0), cb = cam3(bx, by, 0);
+      if (ca.D < NEAR * 2 || cb.D < NEAR * 2) continue;
+      var sa = scr(ca), sb = scr(cb), L = Math.hypot(sb.x - sa.x, sb.y - sa.y), mw = ctx.measureText(r.nm).width + 6;
+      if (L < mw) continue;
+      var mx = (sa.x + sb.x) / 2, my = (sa.y + sb.y) / 2;
+      if (mx < 20 || mx > W - 20 || my < 70 || my > H - 20) continue;
+      var hit = false;
+      for (var q = 0; q < placed.length; q++) if (Math.abs(placed[q].x - mx) < (placed[q].w + mw) / 2 && Math.abs(placed[q].y - my) < 16) { hit = true; break; }
+      if (hit) continue;
+      placed.push({ x: mx, y: my, w: mw }); n++;
+      var ang = Math.atan2(sb.y - sa.y, sb.x - sa.x);
+      if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
+      ctx.save(); ctx.translate(mx, my); ctx.rotate(ang);
+      ctx.lineWidth = 3.2; ctx.strokeStyle = 'rgba(8,4,22,0.9)'; ctx.strokeText(r.nm, 0, 0);
+      ctx.fillStyle = r.k >= 5 ? '#ffb3f0' : r.k === 4 ? '#ffd98a' : r.k === 3 ? '#b6f3ff' : '#d9d2ff'; ctx.fillText(r.nm, 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawPinMark(sx, sy, label, col) {
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - 8, sy - 15); ctx.arc(sx, sy - 22, 11, Math.PI * 0.8, Math.PI * 0.2, false); ctx.closePath();
+    ctx.fillStyle = C.bg; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 8; ctx.stroke(); ctx.shadowBlur = 0;
+    if (label) { ctx.fillStyle = col; ctx.font = '800 12px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, sx, sy - 22); }
+    ctx.restore();
+  }
+  function drawPins() {
+    var list = stops.map(function (q, i) { return { lat: q.lat, lon: q.lon, l: String(i + 1), c: C.yel }; });
+    if (pin) list.push({ lat: pin.lat, lon: pin.lon, l: '', c: C.cyan });
+    for (var i = 0; i < list.length; i++) {
+      var q = list[i], sp;
+      if (world.on || worldBlend() >= 1) sp = wScr(q.lat, q.lon);
+      else { var p = toXY(q.lat, q.lon), c = cam3(p.x, p.y, 0); if (c.D < NEAR * 2) continue; sp = scr(c); sp.vis = true; }
+      if (sp.vis) drawPinMark(sp.x, sp.y, q.l, q.c);
+    }
+  }
   /* Percorso e terreno */
   function pathXY(xs, ys) {
     var n = xs.length, i, dx, dy, Yd, D, U, X;
@@ -1862,11 +2019,12 @@
         if (!((ax < fc.x - R2 && bx < fc.x - R2) || (ax > fc.x + R2 && bx > fc.x + R2) || (ay < fc.y - R2 && by < fc.y - R2) || (ay > fc.y + R2 && by > fc.y + R2))) addPoly(seg(ax, ay, bx, by, 4.5 * wk, 0));
         ax = bx; ay = by;
       }
-      ctx.save(); ctx.globalAlpha = 0.65; ctx.fillStyle = a.color; ctx.shadowColor = a.color; ctx.shadowBlur = 8; ctx.fill(); ctx.restore();
+      ctx.save(); ctx.globalAlpha = alts.sel < 0 ? 0.95 : 0.65; ctx.fillStyle = a.color; ctx.shadowColor = a.color; ctx.shadowBlur = 8; ctx.fill(); ctx.restore();
     });
   }
   function drawRoute() {
     drawAlts();
+    if (state === 'preview' && alts.sel < 0 && alts.list.length > 1) return;
     var pts = route.pts, n = pts.length - 1, i, R2 = cm.R + 60, wk = Math.max(1, cm.Hc / 420);
     var i0 = 0, sx = pts[0].x, sy = pts[0].y;
     if (state === 'nav' || state === 'arrived') {
@@ -1888,9 +2046,9 @@
     ctx.save(); ctx.shadowColor = C.cyan; ctx.shadowBlur = 16; ctx.fillStyle = C.cyan; ctx.fill(); ctx.restore();
   }
   function overlays(side, now) {
-    var d2o = is2D(), gf = ctx.createLinearGradient(0, 0, 0, H * 0.5);
-    gf.addColorStop(0, bgA(d2o ? 0.7 : 0.92)); gf.addColorStop(0.3, bgA(d2o ? 0.3 : 0.62));
-    gf.addColorStop(0.62, d2o ? bgA(0.05) : 'rgba(62,8,74,0.22)'); gf.addColorStop(1, bgA(0));
+    var d2o = cm.s, gf = ctx.createLinearGradient(0, 0, 0, H * 0.5);
+    gf.addColorStop(0, bgA(0.92 - 0.22 * d2o)); gf.addColorStop(0.3, bgA(0.62 - 0.32 * d2o));
+    gf.addColorStop(0.62, d2o > 0.5 ? bgA(0.05) : 'rgba(62,8,74,' + (0.22 * (1 - d2o * 2)) + ')'); gf.addColorStop(1, bgA(0));
     ctx.fillStyle = gf; ctx.fillRect(0, 0, W, H * 0.5);
     var gb = ctx.createLinearGradient(0, H - 220, 0, H);
     gb.addColorStop(0, bgA(0)); gb.addColorStop(1, bgA(0.9));
@@ -1911,7 +2069,8 @@
 
 
   /* ---------- Mondo: mappa Mercator a tile (fino a z14+) e globo quando si esce dal pianeta ---------- */
-  var world = { on: false, mx: 0.5, my: 0.5, z: 12, exitZ: 14, rot: 0 };
+  var world = { on: false, mx: 0.5, my: 0.5, z: 12, zin: 14, ang0: 0, off0: 0, panned: false, wasFree: false };
+  var WX = { mx: 0.5, my: 0.5, z: 12, sx: 0, sy: 0, ang: 0 };
   var WK = 1e6, WZMIN = 1.8, WZ_GLOBE = 3.3, WZMAX = 17.5, WS = 384;
   var W_LAND = '#150f2e', W_WATER = '#071433', W_SEA = '#050a1c';
   var W_LC = { wood: '#10253d', grass: '#122a44', farmland: '#191a3f', sand: '#2b2350', ice: '#2c3560', wetland: '#112f4a', rock: '#1f1a3c' };
@@ -1924,27 +2083,53 @@
   function lonOfMx(mx) { return mx * 360 - 180; }
   function latOfMy(my) { return Math.atan(Math.sinh(Math.PI * (1 - 2 * my))) * 180 / Math.PI; }
   function wzOfLocal(lat, z2) { return Math.log(156543.03 * Math.cos(lat * Math.PI / 180) / (HC * 6 * z2 / cm.F)) / Math.LN2; }
-  function nearOrg() { var ll = { lat: latOfMy(world.my), lon: lonOfMx(world.mx) }; return Math.abs(ll.lat - ORG.lat) < 0.9 && Math.abs(ll.lon - ORG.lon) < 1.3; }
-  function enterWorld() {
+  function nearOrg() { return Math.abs(latOfMy(world.my) - ORG.lat) < 0.9 && Math.abs(lonOfMx(world.mx) - ORG.lon) < 1.3; }
+  function wrapAng(a) { return ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; }
+  function wK() { var k = Math.max(0, Math.min(1, (world.z - (world.zin - 2.5)) / 2.5)); return k * k * (3 - 2 * k); }
+  function wXfWorld() {
+    var k = wK();
+    WX.mx = world.mx; WX.my = world.my; WX.z = world.z; WX.sx = cm.cx; WX.sy = cm.cy + world.off0 * k; WX.ang = world.ang0 * k;
+  }
+  /* trasformazione che coincide con la vista locale dall'alto: serve alla dissolvenza tra mappa locale e mappa del mondo */
+  function wXfLocal() {
     var ll = toLL(fc.x, fc.y);
-    world.mx = mxOf(ll.lon); world.my = myOf(ll.lat);
-    world.z = wzOfLocal(ll.lat, ZMAX2) - 0.01; world.exitZ = wzOfLocal(ll.lat, ZMAX2 * 0.8);
-    world.rot = Math.atan2(cm.fy, cm.fx); world.on = true; rcBtn.hidden = false;
+    WX.mx = mxOf(ll.lon); WX.my = myOf(ll.lat); WX.z = wzOfLocal(ll.lat, cm.Hc / (HC * 6));
+    WX.sx = cm.cx; WX.sy = H * 0.68; WX.ang = -(Math.atan2(cm.fy, cm.fx) + Math.PI / 2);
+  }
+  function exitZnow() { return wzOfLocal(latOfMy(world.my), ZMAX2 * 0.8); }
+  function enterWorld() {
+    wXfLocal();
+    world.mx = WX.mx; world.my = WX.my; world.z = WX.z; world.zin = WX.z; world.ang0 = wrapAng(WX.ang); world.off0 = H * 0.68 - cm.cy;
+    world.panned = false; world.wasFree = view.free; world.on = true; rcBtn.hidden = false;
+  }
+  /* mostra un'area (per esempio un percorso lungo) direttamente sulla mappa del mondo */
+  function enterWorldFit(lat1, lon1, lat2, lon2, side) {
+    var sx = Math.max(1e-6, Math.abs(mxOf(lon2) - mxOf(lon1))), sy = Math.max(1e-6, Math.abs(myOf(lat2) - myOf(lat1)));
+    var z = Math.log(Math.min((W - side) * 0.78 / (256 * sx), H * 0.5 / (256 * sy))) / Math.LN2;
+    world.mx = (mxOf(lon1) + mxOf(lon2)) / 2; world.my = (myOf(lat1) + myOf(lat2)) / 2;
+    world.z = Math.max(WZMIN, Math.min(WZMAX, z)); world.zin = world.z; world.ang0 = 0; world.off0 = 0;
+    world.panned = true; world.wasFree = true; world.on = true; rcBtn.hidden = false;
   }
   function exitWorld(follow) {
+    var k = wK(), lat = latOfMy(world.my), lon = lonOfMx(world.mx);
     world.on = false;
-    if (follow) { view.free = false; rcBtn.hidden = true; }
+    var hc = cm.F * 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, world.z), th = -(world.ang0 * k) - Math.PI / 2;
+    if (follow || (!world.panned && !world.wasFree)) { view.free = false; rcBtn.hidden = true; }
     else {
-      var p = toXY(latOfMy(world.my), lonOfMx(world.mx));
-      view.free = true; view.fx = p.x; view.fy = p.y; view.rot = world.rot; rcBtn.hidden = false;
+      var p = toXY(lat, lon);
+      view.free = true; view.fx = p.x; view.fy = p.y; view.rot = th; rcBtn.hidden = false;
     }
-    if (is2D()) view.z2 = ZMAX2 * 0.8; else view.z3 = ZMAX3 * 0.8;
+    if (is2D()) view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, hc / (HC * 6) * (follow ? 0 + 1 : 1)));
+    else view.z3 = Math.min(ZMAX3, Math.max(ZMIN3, hc / HC));
+    if (follow) { if (is2D()) view.z2 = ZMAX2 * 0.8; else view.z3 = ZMAX3 * 0.8; }
     ensureData();
   }
   function worldPan(dx, dy) {
-    var s = 256 * Math.pow(2, world.z);
-    world.mx = ((world.mx - dx / s) % 1 + 1) % 1;
-    world.my = Math.max(0.01, Math.min(0.99, world.my - dy / s));
+    var s = 256 * Math.pow(2, world.z), k = wK(), a = world.ang0 * k, c = Math.cos(a), sn = Math.sin(a);
+    var u = dx * c + dy * sn, v = -dx * sn + dy * c;     // dal movimento sullo schermo al movimento sulla mappa ruotata
+    world.mx = ((world.mx - u / s) % 1 + 1) % 1;
+    world.my = Math.max(0.01, Math.min(0.99, world.my - v / s));
+    world.panned = true;
   }
   function wTile(z, x, y) {
     var n = Math.pow(2, z); x = ((x % n) + n) % n;
@@ -1977,9 +2162,10 @@
       catch (er) { e.st = 3; e.t = Date.now(); }
     }, function (er) { e.st = 3; e.t = Date.now(); logReq(TILE_HOST, 'mondo', Date.now() - t0, er && er.status ? 'errore ' + er.status : 'errore'); }).then(function () { wInfl--; });
   }
-  function wRender(e, buf) {
-    var cv2 = document.createElement('canvas'); cv2.width = cv2.height = WS;
+  function wRender(e, buf, size) {
+    var S = size || WS, cv2 = document.createElement('canvas'); cv2.width = cv2.height = S;
     var g = cv2.getContext('2d'), z = e.z, places = [];
+    g.scale(S / WS, S / WS); e.buf = buf; e.sz = S;
     if (!buf || !buf.byteLength) { g.fillStyle = W_WATER; g.fillRect(0, 0, WS, WS); e.cv = cv2; e.pl = places; return; }
     var T = mvtDecode(buf), i, j, k;
     g.fillStyle = W_LAND; g.fillRect(0, 0, WS, WS);
@@ -2069,34 +2255,44 @@
     for (var i = 0; i < arr.length - 80; i++) { if (arr[i].st === 1 || arr[i].use >= wFrame - 2) continue; delete wTiles[arr[i].z + '/' + arr[i].x + '/' + arr[i].y]; wCount--; }
   }
   function wScr(lat, lon) {
-    if (world.z < WZ_GLOBE) {
+    if (world.on && world.z < WZ_GLOBE) {
       var R = 256 * Math.pow(2, world.z) / (2 * Math.PI), p0 = latOfMy(world.my) * Math.PI / 180, l0 = lonOfMx(world.mx) * Math.PI / 180;
       var p = lat * Math.PI / 180, dl = lon * Math.PI / 180 - l0, cc = Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(dl);
       return { x: cm.cx + R * Math.cos(p) * Math.sin(dl), y: H * 0.5 - R * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(dl)), vis: cc > 0 };
     }
-    var wp = 256 * Math.pow(2, world.z), dx = mxOf(lon) - world.mx;
+    var wp = 256 * Math.pow(2, WX.z), dx = mxOf(lon) - WX.mx, ca = Math.cos(WX.ang), sa = Math.sin(WX.ang);
     dx -= Math.round(dx);
-    return { x: cm.cx + dx * wp, y: H * 0.5 + (myOf(lat) - world.my) * wp, vis: true };
+    var u = dx * wp, v = (myOf(lat) - WX.my) * wp;
+    return { x: WX.sx + u * ca - v * sa, y: WX.sy + u * sa + v * ca, vis: true };
   }
+  var reUp = 0;
   function drawWorldFlat(alpha) {
-    var Zt = Math.max(0, Math.min(14, Math.round(world.z))), wp = 256 * Math.pow(2, world.z), sc = wp / Math.pow(2, Zt);
-    var cxp = world.mx * wp, cyp = world.my * wp, cx = cm.cx, cy = H * 0.5;
-    var tx0 = Math.floor((cxp - cx) / sc), tx1 = Math.floor((cxp + (W - cx)) / sc), ty0 = Math.floor((cyp - cy) / sc), ty1 = Math.floor((cyp + (H - cy)) / sc);
-    var tx, ty, k, labels = [];
+    var Zt = Math.max(0, Math.min(14, Math.round(WX.z))), wp = 256 * Math.pow(2, WX.z), sc = wp / Math.pow(2, Zt);
+    var cxp = WX.mx * wp, cyp = WX.my * wp, ca = Math.cos(WX.ang), sa = Math.sin(WX.ang), i, k;
+    var umin = 1e12, umax = -1e12, vmin = 1e12, vmax = -1e12, cs = [[0, 0], [W, 0], [0, H], [W, H]];
+    for (i = 0; i < 4; i++) {
+      var ex = cs[i][0] - WX.sx, ey = cs[i][1] - WX.sy, u = ex * ca + ey * sa, v = -ex * sa + ey * ca;
+      if (u < umin) umin = u; if (u > umax) umax = u; if (v < vmin) vmin = v; if (v > vmax) vmax = v;
+    }
+    var tx0 = Math.floor((cxp + umin) / sc), tx1 = Math.floor((cxp + umax) / sc), ty0 = Math.floor((cyp + vmin) / sc), ty1 = Math.floor((cyp + vmax) / sc), tx, ty, labels = [];
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 90) { alpha = alpha; ty1 = ty0 + Math.floor(90 / (tx1 - tx0 + 1)); }
     ctx.save(); ctx.globalAlpha = alpha;
     ctx.fillStyle = W_SEA; ctx.fillRect(0, 0, W, H);
+    ctx.translate(WX.sx, WX.sy); ctx.rotate(WX.ang);
+    reUp = 0;
     for (ty = ty0; ty <= ty1; ty++) for (tx = tx0; tx <= tx1; tx++) {
       var e = wTile(Zt, tx, ty); if (!e) continue;
-      var sx = cx + tx * sc - cxp, sy = cy + ty * sc - cyp;
+      var sx = tx * sc - cxp, sy = ty * sc - cyp;
       if (e.st === 2) {
+        if (sc > e.sz * 1.2 && e.sz < 1024 && reUp < 2 && e.buf) { reUp++; try { wRender(e, e.buf, Math.min(1024, Math.ceil(sc / 128) * 128)); } catch (er) {} }
         ctx.drawImage(e.cv, Math.floor(sx), Math.floor(sy), Math.ceil(sc) + 1, Math.ceil(sc) + 1);
-        for (k = 0; k < e.pl.length; k++) labels.push({ p: e.pl[k], x: sx + e.pl[k].x * sc, y: sy + e.pl[k].y * sc });
+        for (k = 0; k < e.pl.length; k++) labels.push({ p: e.pl[k], u: sx + e.pl[k].x * sc, v: sy + e.pl[k].y * sc });
       } else {
         var n = Math.pow(2, Zt), txw = ((tx % n) + n) % n;
         for (k = 1; k <= Zt; k++) {
           var pe = wPeek(Zt - k, txw >> k, ty >> k);
           if (pe) {
-            var ss = WS / Math.pow(2, k), sub = Math.pow(2, k);
+            var sub = Math.pow(2, k), ss = pe.cv.width / sub;
             ctx.drawImage(pe.cv, (txw % sub) * ss, (ty % sub) * ss, ss, ss, Math.floor(sx), Math.floor(sy), Math.ceil(sc) + 1, Math.ceil(sc) + 1);
             break;
           }
@@ -2104,7 +2300,10 @@
       }
     }
     ctx.restore();
-    if (alpha > 0.6) drawPlaces(labels);
+    if (alpha > 0.6) {
+      for (i = 0; i < labels.length; i++) { var lu = labels[i].u, lv = labels[i].v; labels[i].x = WX.sx + lu * ca - lv * sa; labels[i].y = WX.sy + lu * sa + lv * ca; }
+      drawPlaces(labels);
+    }
   }
   function drawPlaces(labels) {
     var wz = world.z, lang = prefs.lang, out = [], i;
@@ -2194,17 +2393,24 @@
     ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(25,227,255,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.stroke();
     ctx.restore();
   }
-  function drawWorldMarks(t) {
+  function worldLine(rt, color, lw, alpha) {
+    var i, step = Math.max(1, Math.floor(rt.pts.length / 300)), started = false;
+    ctx.beginPath();
+    for (i = 0; i < rt.pts.length; i += step) {
+      var q = toLL(rt.pts[i].x, rt.pts[i].y), s = wScr(q.lat, q.lon);
+      if (!s.vis) { started = false; continue; }
+      if (started) ctx.lineTo(s.x, s.y); else { ctx.moveTo(s.x, s.y); started = true; }
+    }
+    ctx.globalAlpha = alpha; ctx.lineWidth = lw; ctx.strokeStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 10; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+  }
+  function drawWorldMarks(t, alpha) {
     var i, ll = toLL(car.x, car.y), me = wScr(ll.lat, ll.lon);
+    ctx.save(); ctx.globalAlpha = alpha;
     if (route) {
-      ctx.beginPath();
-      var step = Math.max(1, Math.floor(route.pts.length / 300)), started = false;
-      for (i = 0; i < route.pts.length; i += step) {
-        var q = toLL(route.pts[i].x, route.pts[i].y), s = wScr(q.lat, q.lon);
-        if (!s.vis) { started = false; continue; }
-        if (started) ctx.lineTo(s.x, s.y); else { ctx.moveTo(s.x, s.y); started = true; }
+      if (state === 'preview' && alts.list.length > 1) {
+        alts.list.forEach(function (a, k) { if (k !== alts.sel) worldLine(a.rt, a.color, 3, alts.sel < 0 ? 0.9 : 0.5); });
       }
-      ctx.lineWidth = 3; ctx.strokeStyle = C.cyan; ctx.shadowColor = C.cyan; ctx.shadowBlur = 10; ctx.lineCap = 'round'; ctx.stroke(); ctx.shadowBlur = 0;
+      worldLine(route, C.cyan, 3.5, 1);
       var d = wScr(route.dest.lat, route.dest.lon);
       if (d.vis) { ctx.beginPath(); ctx.moveTo(d.x, d.y - 9); ctx.lineTo(d.x + 7, d.y); ctx.lineTo(d.x, d.y + 9); ctx.lineTo(d.x - 7, d.y); ctx.closePath(); ctx.fillStyle = C.bg; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.yel; ctx.stroke(); }
     }
@@ -2214,13 +2420,28 @@
       ctx.beginPath(); ctx.arc(me.x, me.y, 6, 0, 6.2832); ctx.fillStyle = prefs.carColor || C.mag; ctx.shadowColor = prefs.carColor || C.mag; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
       ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
     }
+    ctx.restore();
+  }
+  /* dissolvenza tra la vista locale dall'alto e la mappa del mondo: stessa scala, stessa rotazione, stesso centro */
+  function worldBlend() {
+    if (cm.s < 0.99) return 0;
+    var x = (cm.Hc - HC * 6 * 1.3) / (HC * 6 * (3.8 - 1.3));
+    x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x);
+  }
+  function drawWorldOverlay(t, a) {
+    wFrame++; wWant.length = 0;
+    wXfLocal(); drawWorldFlat(a);
+    drawWorldMarks(t, a);
+    wPump();
+    if (wFrame % 90 === 0) wEvict();
   }
   function drawWorld(t) {
     wFrame++; wWant.length = 0;
+    wXfWorld();
     var gA = world.z < WZ_GLOBE + 0.45 ? Math.min(1, (WZ_GLOBE + 0.45 - world.z) / 0.5) : 0;
     if (gA < 1) drawWorldFlat(1);
     if (gA > 0) drawGlobe(gA);
-    drawWorldMarks(t);
+    drawWorldMarks(t, 1);
     wPump();
     if (wFrame % 90 === 0) wEvict();
   }
@@ -2240,8 +2461,13 @@
   }
   function fitRoute() {
     if (!route || !ORG) return;
-    var b = route.bbox, a = toXY(b[0], b[1]), c2 = toXY(b[2], b[3]);
+    var b = route.bbox.slice();
+    if (state === 'preview') alts.list.forEach(function (al) { var q = al.rt.bbox; b[0] = Math.min(b[0], q[0]); b[1] = Math.min(b[1], q[1]); b[2] = Math.max(b[2], q[2]); b[3] = Math.max(b[3], q[3]); });
+    var a = toXY(b[0], b[1]), c2 = toXY(b[2], b[3]);
     var mx = (a.x + c2.x) / 2, my = (a.y + c2.y) / 2, w = Math.abs(c2.x - a.x), h = Math.abs(c2.y - a.y);
+    var need = (Math.max(w * 1.3 / W, h * 1.3 / (H * 0.7)) + 0.0001) * Math.min(W * 1.25, H * 1.05) / (HC * 6);
+    if (need > ZMAX2 * 0.9) { world.on = false; enterWorldFit(b[0], b[1], b[2], b[3], (W >= 900 && W / H >= 1.5) ? Math.min(430, W * 0.36) : 0); touch(); return; }
+    world.on = false;
     view.free = true; view.fx = mx; view.fy = my; rcBtn.hidden = false;
     if (is2D()) {
       view.rot = -Math.PI / 2;
@@ -2262,14 +2488,25 @@
       gest = { t: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, a0: Math.atan2(b.y - a.y, b.x - a.x), z0: curZoom(), r0: null, moved: false };
     } else gest = null;
   }
+  var lpT = 0;
   cv.addEventListener('pointerdown', function (e) {
     if (!ORG || !car.has) return;
     try { cv.setPointerCapture(e.pointerId); } catch (x) {}
     ptrs[e.pointerId] = pos(e); startGesture(); touch();
+    clearTimeout(lpT);
+    if (Object.keys(ptrs).length === 1) {
+      var q0 = pos(e);
+      lpT = setTimeout(function () {
+        if (!gest || gest.t !== 'pan' || gest.on || Object.keys(ptrs).length !== 1) return;
+        var ll = screenToLL(q0.x, q0.y);
+        if (ll) { try { navigator.vibrate && navigator.vibrate(30); } catch (x) {} openPin(ll); }
+      }, 600);
+    }
   });
   cv.addEventListener('pointermove', function (e) {
     if (!ptrs[e.pointerId] || !gest) return;
     ptrs[e.pointerId] = pos(e); touch();
+    if (lpT && gest && Math.hypot(ptrs[e.pointerId].x - gest.x0, ptrs[e.pointerId].y - gest.y0) > 9) { clearTimeout(lpT); lpT = 0; }
     var ids = Object.keys(ptrs);
     if (world.on) {
       if (gest.t === 'pan' && ids.length === 1) {
@@ -2307,6 +2544,7 @@
   });
   function endPtr(e) {
     if (!ptrs[e.pointerId]) return;
+    clearTimeout(lpT);
     delete ptrs[e.pointerId];
     try { cv.releasePointerCapture(e.pointerId); } catch (x) {}
     startGesture();
@@ -2336,9 +2574,16 @@
   function frame(now) {
     var dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (car.has) {
-      var dx = tgt.x - car.x, dy = tgt.y - car.y;
-      if (dx * dx + dy * dy > 80 * 80) { car.x = tgt.x; car.y = tgt.y; }
-      else { var kk = Math.min(1, dt * 6); car.x += dx * kk; car.y += dy * kk; }
+      // previsione: tra un fix GPS e l'altro il bersaglio avanza alla velocità attuale, così la mappa scorre senza scatti
+      var el = Math.min(1.5, Math.max(0, (now - fixT) / 1000)), px = tgt.x, py = tgt.y;
+      var vNow = speedMs * (sim.active ? prefs.simMult : 1);
+      if (vNow > 0.6) {
+        if (tgtSnap && route && state === 'nav') { var pq = pointAt(route, Math.min(route.total, tgtD + vNow * el)); px = pq.x; py = pq.y; }
+        else { px += Math.cos(phiT) * vNow * el; py += Math.sin(phiT) * vNow * el; }
+      }
+      var dx = px - car.x, dy = py - car.y;
+      if (dx * dx + dy * dy > 80 * 80) { car.x = px; car.y = py; }
+      else { var kk = 1 - Math.exp(-dt * 9); car.x += dx * kk; car.y += dy * kk; }
       var diff = ((phiT - phi + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
       phi += diff * Math.min(1, dt * 4);
     }
@@ -2377,6 +2622,12 @@
   }
   window.__nightrider = {
     info: function () { return { state: state, gps: gps, here: here, route: route && { total: route.total, man: route.man.length, cams: route.cams.length }, prog: prog, cells: cellList.length, cams: camList.length, speed: speedMs, limit: limitNow, maxB: maxB, free: view.free, world: { on: world.on, z: world.z, mx: world.mx, my: world.my }, z3: view.z3, z2: view.z2, d2: is2D(), car: { x: car.x, y: car.y }, trail: route ? (function () { var pr = projectOnRoute(route, car.x, car.y, prog.idx, false); return { d: pr.d, dist: pr.dist }; })() : null }; },
+    xcheck: function (lat, lon) {
+      var p = toXY(lat, lon), c = cam3(p.x, p.y, 0), l = scr(c), sv = { x: WX.sx, y: WX.sy, ang: WX.ang, mx: WX.mx, my: WX.my, z: WX.z };
+      wXfLocal(); var w2 = wScr(lat, lon); WX.sx = sv.x; WX.sy = sv.y; WX.ang = sv.ang; WX.mx = sv.mx; WX.my = sv.my; WX.z = sv.z;
+      return { local: l, world: { x: w2.x, y: w2.y }, s: cm.s, hc: cm.Hc };
+    },
+    setZ: function (z) { if (is2D()) view.z2 = z; else view.z3 = z; },
     pick: function (rs, type) { var o = prefs.routeType; prefs.routeType = type; var x = pickRoute(rs); prefs.routeType = o; return x; }
   };
 })();

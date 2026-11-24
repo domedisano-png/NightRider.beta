@@ -21,8 +21,9 @@ Alla prima apertura consenti l'accesso alla posizione. Se il GPS non c'è o lo r
 ## Come si usa
 
 1. Scrivi la destinazione nella barra di ricerca e scegli un risultato.
-2. Compaiono fino a tre percorsi (più veloce, più breve, meno svolte, senza autostrade): toccane uno per sceglierlo, la mappa li mostra con colori diversi. "Avvia" parte con il GPS, "Prova senza muoverti" simula il percorso da fermo.
-3. Sulla mappa: trascina con un dito, pizzica per lo zoom (con due dita puoi anche ruotare), oppure usa + e −. Se allontani ancora la vista si passa alla mappa del mondo e poi al globo intero; avvicinandoti si torna alla vista di guida. Il pulsante 2D/3D cambia la vista, il mirino riporta alla tua posizione.
+2. Compaiono fino a tre percorsi diversi (più veloce, più breve, meno svolte, senza autostrade o alternativo). Avvia resta spento finché non ne scegli uno: toccane uno e la mappa lo evidenzia. "Avvia" parte con il GPS, "Prova senza muoverti" simula il percorso da fermo.
+3. Sulla mappa: trascina con un dito, pizzica per lo zoom (con due dita puoi anche ruotare), oppure usa + e −. Se allontani ancora la vista si passa alla mappa del mondo e poi al globo intero; avvicinandoti si torna alla vista di guida. Le strade principali hanno un bordo al neon: fucsia per le autostrade, ambra per le extraurbane principali, ciano per le statali e viola chiaro per le provinciali; i nomi delle vie si possono spegnere dal menù. Il pulsante 2D/3D cambia la vista, il mirino riporta alla tua posizione.
+3b. **Tocco lungo sulla mappa** (circa mezzo secondo): compare una scheda con il nome del posto. "Vai qui" calcola il percorso verso quel punto, "Aggiungi tappa" (con un percorso già scelto, anche mentre guidi) lo inserisce come tappa intermedia, numerata sulla mappa.
 4. Durante la guida vedi la prossima svolta, gli avvisi autovelox, il limite e la velocità.
 5. Nel menù in alto a destra: lingua (italiano, inglese, spagnolo, francese, tedesco), stile delle indicazioni (Classico, Cyberpunk, Divertente, Rockerboy, Netrunner; gli stili sono in italiano e inglese), voce (puoi usare qualsiasi voce installata sul dispositivo: nuove voci si scaricano dalle impostazioni di iPhone o Android, poi tocca "Aggiorna voci"), segnala un autovelox nella tua posizione, chiave TomTom opzionale.
 
