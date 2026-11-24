@@ -35,7 +35,7 @@
   };
   var ROAD_MINOR = '#2a2050', ROAD_MAJOR = '#3a2c6e', ROAD_MOTORWAY = '#473582';
   // bordo neon per tipo di strada: autostrada fucsia, extraurbana principale ambra, statali ciano, provinciali viola chiaro
-  var EDGE = [null, 'rgba(150,120,255,0.55)', 'rgba(25,227,255,0.6)', '#19e3ff', '#ffb020', '#ff2bd6'];
+  var EDGE = [null, '#5a4aa8', '#12a0b8', '#19e3ff', '#ffb020', '#ff2bd6'];
   var LX = -0.6, LY = -0.8;
 
   var THEMES = {
@@ -61,7 +61,7 @@
     carIcon: 'arrow', carColor: '#f7e733',
     voice: true, voiceTurn: true, voiceCam: true, voiceName: '', voiceStyle: 'natural', volume: 0.9,
     cams: true, gloss: true, theme: 'fuchsia', tilt: 0.6, view2d: false,
-    lang: detectLang(), persona: 'cyber', roadNames: true, voiceAll: false, ttKey: '',
+    lang: detectLang(), persona: 'cyber', roadNames: true, pois: true, voiceAll: false, ttKey: '',
     units: 'km', wake: true, simMult: 3
   };
   var prefs = {};
@@ -550,7 +550,49 @@
         }
       }
     }
-    return { els: els, ground: ground };
+    // nomi delle vie (livello transportation_name) e punti di interesse (livello poi)
+    var labels = [], pois = [], NL = T.layers.transportation_name, PO = T.layers.poi;
+    if (NL) for (i = 0; i < NL.feats.length; i++) {
+      var nf = NL.feats[i]; if (nf.type !== 2) continue;
+      var np = T.props(NL, nf), nkind = OMT_KIND[np['class']], nnm = np.name || np.ref;
+      if (nkind === undefined || !nnm) continue;
+      var nlines = T.geom(nf), best = null, bl = 0;
+      for (j = 0; j < nlines.length; j++) {
+        var nl = nlines[j], nlen = 0;
+        for (k = 2; k < nl.length; k += 2) nlen += Math.hypot(nl[k] - nl[k - 2], nl[k + 1] - nl[k - 1]);
+        if (nlen > bl) { bl = nlen; best = nl; }
+      }
+      if (!best || best.length < 4) continue;
+      var nxy = [], cum = [0];
+      for (k = 0; k < best.length; k += 2) { var nq = pt(best[k], best[k + 1], NL.ext), nw = toXY(nq.lat, nq.lon); nxy.push(nw); if (k) cum.push(cum[cum.length - 1] + Math.hypot(nw.x - nxy[nxy.length - 2].x, nw.y - nxy[nxy.length - 2].y)); }
+      var tot = cum[cum.length - 1]; if (tot < 24) continue;
+      var atLen = function (L) { var m = 1; while (m < cum.length - 1 && cum[m] < L) m++; var f = (L - cum[m - 1]) / Math.max(1e-6, cum[m] - cum[m - 1]); return { x: nxy[m - 1].x + (nxy[m].x - nxy[m - 1].x) * f, y: nxy[m - 1].y + (nxy[m].y - nxy[m - 1].y) * f }; };
+      var half = Math.min(tot / 4, 30), pm = atLen(tot / 2), pa = atLen(tot / 2 - half), pb = atLen(tot / 2 + half), dl = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
+      labels.push({ nm: nnm, x: pm.x, y: pm.y, ax: pa.x, ay: pa.y, bx: pb.x, by: pb.y, L: tot, k: nkind });
+    }
+    if (PO) for (i = 0; i < PO.feats.length; i++) {
+      var pf = PO.feats[i]; if (pf.type !== 1) continue;
+      var pp = T.props(PO, pf), cat = poiCat(pp['class'], pp.subclass);
+      if (!cat) continue;
+      var pg = T.geom(pf); if (!pg.length) continue;
+      var pq = pt(pg[0][0], pg[0][1], PO.ext), pw = toXY(pq.lat, pq.lon);
+      pois.push({ x: pw.x, y: pw.y, c: cat, nm: pp.name || '', r: pp.rank || 99 });
+    }
+    return { els: els, ground: ground, labels: labels, pois: pois };
+  }
+  var OMT_KIND = { motorway: 5, trunk: 4, primary: 3, secondary: 2, tertiary: 1, minor: 0, service: 0 };
+  function poiCat(c, sc) {
+    if (c === 'fuel') return 'fuel';
+    if (c === 'parking' || sc === 'parking') return 'parking';
+    if (c === 'restaurant' || c === 'fast_food' || sc === 'restaurant' || sc === 'fast_food') return 'food';
+    if (c === 'cafe' || c === 'bar' || c === 'pub' || sc === 'cafe' || sc === 'bar' || sc === 'pub' || c === 'ice_cream') return 'cafe';
+    if (c === 'shop' || c === 'grocery' || c === 'clothing_store' || c === 'convenience' || c === 'supermarket' || c === 'bakery' || c === 'butcher' || c === 'florist' || sc === 'supermarket' || sc === 'convenience') return 'shop';
+    if (c === 'hospital' || c === 'pharmacy' || c === 'doctors' || c === 'dentist' || c === 'clinic') return 'health';
+    if (c === 'lodging' || sc === 'hotel') return 'hotel';
+    if (c === 'bank' || c === 'atm') return 'money';
+    if (c === 'charging_station' || sc === 'charging_station') return 'charge';
+    if (c === 'attraction' || c === 'museum' || c === 'monument' || sc === 'attraction') return 'sight';
+    return '';
   }
 
   function gunzip(buf) {
@@ -592,7 +634,7 @@
   function applyTile(cell, buf) {
     var tl = buf && buf.byteLength ? tileToEls(buf, cell.i, cell.j) : { els: [], ground: [] };
     var parsed = parseOsm({ elements: tl.els });
-    cell.b = parsed.b; cell.r = parsed.r; cell.g = tl.ground; cell.sr = cell.sb = 'ok';
+    cell.b = parsed.b; cell.r = parsed.r; cell.g = tl.ground; cell.l = tl.labels || []; cell.p = tl.pois || []; cell.sr = cell.sb = 'ok';
     refreshCellList();
   }
   function startTile(cell, g) {
@@ -1023,6 +1065,15 @@
   var alts = { list: [], sel: 0 };
   function renderAlts() {
     var box = $('alts'); if (!box) return;
+    var mini = $('altsMini'); mini.innerHTML = '';
+    if (state === 'preview' && alts.list.length > 1) alts.list.forEach(function (a, i) {
+      var c = document.createElement('button'); c.type = 'button'; c.className = 'chip'; c.style.setProperty('--c', a.color);
+      c.setAttribute('aria-checked', i === alts.sel ? 'true' : 'false');
+      c.innerHTML = '<span class="dot"></span><b></b><small></small>';
+      c.querySelector('b').textContent = fmtDur(a.rt.dur); c.querySelector('small').textContent = fmtDist(a.rt.dist);
+      c.addEventListener('click', function () { selectAlt(i); });
+      mini.appendChild(c);
+    });
     box.innerHTML = '';
     var lock = state === 'preview' && alts.list.length > 1 && alts.sel < 0;
     $('goBtn').disabled = lock; $('simBtn').disabled = lock;
@@ -1045,11 +1096,46 @@
   }
   function selectAlt(i) {
     if (!alts.list[i]) return;
-    alts.sel = i; setRoute(alts.list[i].rt); showMeta(); routeCams(route); renderAlts();
+    alts.sel = i; setRoute(alts.list[i].rt); showMeta(); routeCams(route); setSheet(true); renderAlts();
+  }
+  function setSheet(open) { $('previewPanel').classList.toggle('collapsed', !open); if (route && state === 'preview') showMeta(); }
+  (function () {
+    var pv = $('previewPanel'), y0 = null, t0 = 0;
+    ['grab', 'pvTitle', 'altsMini', 'pvMeta'].forEach(function (id) {
+      var el = $(id);
+      el.addEventListener('pointerdown', function (e) { y0 = e.clientY; t0 = Date.now(); });
+      el.addEventListener('pointerup', function (e) {
+        if (y0 === null) return;
+        var dy = e.clientY - y0, open = !pv.classList.contains('collapsed'); y0 = null;
+        if (dy < -22) setSheet(true); else if (dy > 22) setSheet(false);
+        else if (id === 'grab' && Date.now() - t0 < 500) setSheet(!open);
+      });
+      el.addEventListener('pointercancel', function () { y0 = null; });
+    });
+  })();
+  /* tocco su un percorso sulla mappa: lo seleziona */
+  function hitAlt(sx, sy) {
+    var best = -1, bd = 30, k, i, world2 = world.on || worldBlend() >= 0.5;
+    if (world2) { if (world.on) wXfWorld(); else wXfLocal(); }
+    alts.list.forEach(function (a, ai) {
+      var pts = a.rt.pts, step = Math.max(1, Math.floor(pts.length / 500)), px = null, py = null;
+      for (i = 0; i < pts.length; i += step) {
+        var q, ok = true;
+        if (world2) { var ll = toLL(pts[i].x, pts[i].y), w = wScr(ll.lat, ll.lon); q = { x: w.x, y: w.y }; ok = w.vis; }
+        else { var c = cam3(pts[i].x, pts[i].y, 0); if (c.D < NEAR * 2) ok = false; else q = scr(c); }
+        if (ok && px !== null) {
+          var vx = q.x - px, vy = q.y - py, l2 = vx * vx + vy * vy, tt = l2 ? Math.max(0, Math.min(1, ((sx - px) * vx + (sy - py) * vy) / l2)) : 0;
+          var d = Math.hypot(sx - (px + vx * tt), sy - (py + vy * tt));
+          if (d < bd) { bd = d; best = ai; }
+        }
+        if (ok) { px = q.x; py = q.y; } else px = null;
+      }
+    });
+    return best;
   }
   function showMeta() {
     $('pvTitle').textContent = route.dest.name + (stops.length ? ' (+' + stops.length + ' ' + t('stopLbl').toLowerCase() + ')' : '');
-    $('pvMeta').textContent = alts.list.length > 1 && alts.sel < 0 ? t('pickRoute') : fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + ' · ' + t('lArr') + ' ' + clockAfter(route.dur);
+    $('pvMeta').textContent = alts.list.length > 1 && alts.sel < 0 ? ($('previewPanel').classList.contains('collapsed') ? t('sheetHint') : t('pickRoute')) : fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + ' · ' + t('lArr') + ' ' + clockAfter(route.dur);
   }
   var camDone = {};
   function routeCams(rt) {
@@ -1260,6 +1346,9 @@
     }, function () {});
   }
   function closePin() { pin = null; var c = $('pinCard'); if (c) c.hidden = true; }
+  Array.prototype.forEach.call(document.querySelectorAll('details.acc'), function (d) {
+    d.addEventListener('toggle', function () { if (d.open) Array.prototype.forEach.call(document.querySelectorAll('details.acc'), function (o) { if (o !== d) o.open = false; }); });
+  });
   $('pinX').addEventListener('click', closePin);
   $('pinGo').addEventListener('click', function () { if (pin) chooseDest({ name: pin.name, sub: pin.sub, lat: pin.lat, lon: pin.lon }); });
   $('pinStop').addEventListener('click', function () {
@@ -1285,6 +1374,7 @@
   function showPreview() {
     showMeta();
     setState('preview');
+    setSheet(alts.list.length < 2);
     renderAlts();
     fitRoute();
     ensureData();
@@ -1610,7 +1700,7 @@
   function setZoom(z) {
     if (world.on) {
       world.z = Math.min(WZMAX, Math.max(WZMIN, Math.log(WK / z) / Math.LN2));
-      if (world.z > world.exitZ) { if (nearOrg()) exitWorld(false); else world.z = Math.min(world.z, WZMAX); }
+      if (world.z > exitZnow() && nearOrg()) exitWorld(false);
       return;
     }
     if (is2D()) { if (z > ZMAX2 && ORG && car.has) { enterWorld(); return; } view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, z)); }
@@ -1834,14 +1924,20 @@
         }
       }
     }
-    for (var kd = 0; kd < 6; kd++) {
+    // 1) tutti i bordi insieme, in somma di luce: agli incroci i colori si fondono e non si coprono a vicenda
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (var kd = 1; kd < 6; kd++) {
+      if (!vis[kd].length) continue;
+      roadPath(vis[kd], 1.6);
+      ctx.globalAlpha = kd >= 3 ? 0.9 : 0.75; ctx.fillStyle = EDGE[kd];
+      if (kd >= 3) { ctx.shadowColor = EDGE[kd]; ctx.shadowBlur = 9; }
+      ctx.fill(); ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+    // 2) poi il corpo della strada: unisce gli incroci in un'unica superficie, i bordi restano solo all'esterno
+    for (kd = 0; kd < 6; kd++) {
       if (kd === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
       if (!vis[kd].length) continue;
-      if (kd > 0) {
-        roadPath(vis[kd], 1.55);
-        ctx.fillStyle = EDGE[kd];
-        if (kd >= 3) { ctx.save(); ctx.shadowColor = EDGE[kd]; ctx.shadowBlur = 9; ctx.fill(); ctx.restore(); } else ctx.fill();
-      }
       roadPath(vis[kd], 1);
       ctx.fillStyle = colors[kd]; ctx.fill();
     }
@@ -1913,7 +2009,8 @@
       else drawDest(it.e);
     }
     if (route && !d2 && view.free && view.z3 > 1.6) { ctx.globalAlpha = 0.9; drawRoute(); ctx.globalAlpha = 1; }   // da lontano il percorso resta sopra le case
-    drawRoadNames(vis);
+    drawPois();
+    drawRoadNames();
     drawVehicle();
     if (wb > 0) drawWorldOverlay(t, wb);
     drawPins();
@@ -1921,35 +2018,100 @@
   }
 
   /* Nomi delle vie: seguono la direzione della strada, solo dove c'è spazio e senza sovrapporsi */
-  function drawRoadNames(vis) {
+  function drawRoadNames() {
     if (!prefs.roadNames || cm.Hc > 2200) return;
-    var minK = cm.Hc < 450 ? 0 : cm.Hc < 900 ? 1 : 2, cands = [], kd, k, i;
-    for (kd = 5; kd >= minK; kd--) for (k = 0; k < vis[kd].length && cands.length < 220; k++) if (vis[kd][k].nm && vis[kd][k].ll > 25) cands.push(vis[kd][k]);
+    var minK = cm.Hc < 450 ? 0 : cm.Hc < 900 ? 1 : 2, cands = [], k, i, c, R2 = cm.R + 40;
+    for (c = 0; c < cellList.length; c++) {
+      var ls = cellList[c].l;
+      if (!ls) continue;
+      for (k = 0; k < ls.length; k++) {
+        var l = ls[k];
+        if (l.k < minK || Math.abs(l.x - fc.x) > R2 || Math.abs(l.y - fc.y) > R2) continue;
+        cands.push(l);
+      }
+    }
+    cands.sort(function (a, b) { return b.k - a.k || b.L - a.L; });
     ctx.save();
     ctx.font = '700 ' + (cm.Hc < 450 ? 12 : 11) + 'px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     var placed = [], n = 0;
-    for (i = 0; i < cands.length && n < 40; i++) {
-      var r = cands[i], li = r.li, ax = r.xs[li], ay = r.ys[li], bx = r.xs[li + 1], by = r.ys[li + 1];
-      var ca = cam3(ax, ay, 0), cb = cam3(bx, by, 0);
-      if (ca.D < NEAR * 2 || cb.D < NEAR * 2) continue;
-      var sa = scr(ca), sb = scr(cb), L = Math.hypot(sb.x - sa.x, sb.y - sa.y), mw = ctx.measureText(r.nm).width + 6;
-      if (L < mw) continue;
-      var mx = (sa.x + sb.x) / 2, my = (sa.y + sb.y) / 2;
-      if (mx < 20 || mx > W - 20 || my < 70 || my > H - 20) continue;
+    for (i = 0; i < cands.length && n < 45; i++) {
+      var r = cands[i], ca = cam3(r.ax, r.ay, 0), cb = cam3(r.bx, r.by, 0), cmid = cam3(r.x, r.y, 0);
+      if (ca.D < NEAR * 2 || cb.D < NEAR * 2 || cmid.D < NEAR * 2) continue;
+      var sa = scr(ca), sb = scr(cb), sm = scr(cmid), L = Math.hypot(sb.x - sa.x, sb.y - sa.y), mw = ctx.measureText(r.nm).width + 6;
+      if (L * 1.7 < mw) continue;
+      if (sm.x < 20 || sm.x > W - 20 || sm.y < 70 || sm.y > H - 20) continue;
       var hit = false;
-      for (var q = 0; q < placed.length; q++) if (Math.abs(placed[q].x - mx) < (placed[q].w + mw) / 2 && Math.abs(placed[q].y - my) < 16) { hit = true; break; }
+      for (var q = 0; q < placed.length; q++) if (Math.abs(placed[q].x - sm.x) < (placed[q].w + mw) / 2 && Math.abs(placed[q].y - sm.y) < 15) { hit = true; break; }
       if (hit) continue;
-      placed.push({ x: mx, y: my, w: mw }); n++;
+      placed.push({ x: sm.x, y: sm.y, w: mw }); n++;
       var ang = Math.atan2(sb.y - sa.y, sb.x - sa.x);
       if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
-      ctx.save(); ctx.translate(mx, my); ctx.rotate(ang);
-      ctx.lineWidth = 3.2; ctx.strokeStyle = 'rgba(8,4,22,0.9)'; ctx.strokeText(r.nm, 0, 0);
-      ctx.fillStyle = r.k >= 5 ? '#ffb3f0' : r.k === 4 ? '#ffd98a' : r.k === 3 ? '#b6f3ff' : '#d9d2ff'; ctx.fillText(r.nm, 0, 0);
+      ctx.save(); ctx.translate(sm.x, sm.y); ctx.rotate(ang);
+      ctx.lineWidth = 3.4; ctx.strokeStyle = 'rgba(8,4,22,0.92)'; ctx.strokeText(r.nm, 0, 0);
+      ctx.fillStyle = r.k >= 5 ? '#ffb3f0' : r.k === 4 ? '#ffd98a' : r.k === 3 ? '#b6f3ff' : '#e4defa'; ctx.fillText(r.nm, 0, 0);
       ctx.restore();
     }
     ctx.restore();
   }
 
+  /* Punti di interesse: icone neon semplici disegnate a mano, con il nome quando c'è spazio */
+  var POI_COL = { fuel: '#ffb020', parking: '#5aa9ff', food: '#ff2e88', cafe: '#c07bff', shop: '#19e3ff', health: '#3ddc97', hotel: '#9aa4ff', money: '#f7e733', charge: '#3ddc97', sight: '#ff8fe9' };
+  function poiIcon(cat, x, y, r) {
+    var col = POI_COL[cat] || '#ccc';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fillStyle = 'rgba(10,6,24,0.88)'; ctx.fill();
+    ctx.lineWidth = 1.8; ctx.strokeStyle = col; ctx.stroke();
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = Math.max(1.3, r * 0.17); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    var u = r / 10;
+    ctx.beginPath();
+    if (cat === 'parking') { ctx.font = '800 ' + (r * 1.25) + 'px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P', x, y + u * 0.5); return; }
+    if (cat === 'fuel') { ctx.rect(x - 4 * u, y - 5 * u, 5.5 * u, 9 * u); ctx.moveTo(x + 1.5 * u, y - 2 * u); ctx.lineTo(x + 4.5 * u, y - 2 * u); ctx.lineTo(x + 4.5 * u, y + 3 * u); }
+    else if (cat === 'food') { ctx.moveTo(x - 3 * u, y - 5 * u); ctx.lineTo(x - 3 * u, y + 5 * u); ctx.moveTo(x - 5 * u, y - 5 * u); ctx.lineTo(x - 5 * u, y - 1 * u); ctx.moveTo(x - 1 * u, y - 5 * u); ctx.lineTo(x - 1 * u, y - 1 * u); ctx.moveTo(x + 3.5 * u, y - 5 * u); ctx.lineTo(x + 3.5 * u, y + 5 * u); ctx.moveTo(x + 3.5 * u, y - 5 * u); ctx.quadraticCurveTo(x + 6 * u, y - 2 * u, x + 3.5 * u, y + 0.5 * u); }
+    else if (cat === 'cafe') { ctx.moveTo(x - 4 * u, y - 3 * u); ctx.lineTo(x + 3 * u, y - 3 * u); ctx.lineTo(x + 2 * u, y + 4 * u); ctx.lineTo(x - 3 * u, y + 4 * u); ctx.closePath(); ctx.moveTo(x + 3 * u, y - 1.5 * u); ctx.quadraticCurveTo(x + 6 * u, y - 1 * u, x + 3 * u, y + 2 * u); }
+    else if (cat === 'shop') { ctx.rect(x - 4 * u, y - 2 * u, 8 * u, 7 * u); ctx.moveTo(x - 2 * u, y - 2 * u); ctx.quadraticCurveTo(x, y - 7 * u, x + 2 * u, y - 2 * u); }
+    else if (cat === 'health') { ctx.moveTo(x, y - 5 * u); ctx.lineTo(x, y + 5 * u); ctx.moveTo(x - 5 * u, y); ctx.lineTo(x + 5 * u, y); }
+    else if (cat === 'hotel') { ctx.moveTo(x - 5 * u, y + 4 * u); ctx.lineTo(x - 5 * u, y - 4 * u); ctx.moveTo(x - 5 * u, y + 1 * u); ctx.lineTo(x + 5 * u, y + 1 * u); ctx.lineTo(x + 5 * u, y + 4 * u); ctx.moveTo(x - 3 * u, y - 1 * u); ctx.lineTo(x - 0.5 * u, y - 1 * u); }
+    else if (cat === 'money') { ctx.font = '800 ' + (r * 1.2) + 'px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('€', x, y + u * 0.5); return; }
+    else if (cat === 'charge') { ctx.moveTo(x + 1.5 * u, y - 5.5 * u); ctx.lineTo(x - 3 * u, y + 0.5 * u); ctx.lineTo(x, y + 0.5 * u); ctx.lineTo(x - 1.5 * u, y + 5.5 * u); ctx.lineTo(x + 3 * u, y - 0.5 * u); ctx.lineTo(x, y - 0.5 * u); ctx.closePath(); }
+    else { ctx.arc(x, y, 2.4 * u, 0, 6.2832); }
+    ctx.stroke();
+  }
+  function drawPois() {
+    if (!prefs.pois || cm.Hc > 900) return;
+    var list = [], c, k, R2 = cm.R + 30;
+    for (c = 0; c < cellList.length; c++) {
+      var ps = cellList[c].p;
+      if (!ps) continue;
+      for (k = 0; k < ps.length; k++) {
+        var q = ps[k];
+        if (Math.abs(q.x - fc.x) > R2 || Math.abs(q.y - fc.y) > R2) continue;
+        var cc = cam3(q.x, q.y, 0);
+        if (cc.D < NEAR * 3) continue;
+        var sp = scr(cc);
+        if (sp.x < 10 || sp.x > W - 10 || sp.y < 70 || sp.y > H - 30) continue;
+        list.push({ q: q, x: sp.x, y: sp.y, D: cc.D });
+      }
+    }
+    list.sort(function (a, b) { return a.D - b.D; });
+    var placed = [], n = 0, i, showNames = cm.Hc < 520, r = cm.Hc < 300 ? 11 : 9;
+    ctx.save();
+    ctx.font = '700 10.5px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (i = 0; i < list.length && n < 70; i++) {
+      var it = list[i], hit = false, rr = Math.max(6, Math.min(r, r * 150 / Math.max(60, it.D * 0.6)));
+      for (k = 0; k < placed.length; k++) if (Math.abs(placed[k].x - it.x) < rr + placed[k].r + 2 && Math.abs(placed[k].y - it.y) < rr + placed[k].r + 2) { hit = true; break; }
+      if (hit) continue;
+      placed.push({ x: it.x, y: it.y, r: rr }); n++;
+      poiIcon(it.q.c, it.x, it.y, rr);
+      ctx.font = '700 10.5px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      if (showNames && it.q.nm && n <= 28) {
+        var tw = ctx.measureText(it.q.nm).width + 4, clash = false;
+        for (k = 0; k < placed.length - 1; k++) if (Math.abs(placed[k].x - it.x) < tw / 2 + placed[k].r && Math.abs(placed[k].y - (it.y + rr + 7)) < 12) { clash = true; break; }
+        if (clash) continue;
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,4,22,0.92)'; ctx.strokeText(it.q.nm, it.x, it.y + rr + 2);
+        ctx.fillStyle = '#efeaff'; ctx.fillText(it.q.nm, it.x, it.y + rr + 2);
+      }
+    }
+    ctx.restore();
+  }
   function drawPinMark(sx, sy, label, col) {
     ctx.save();
     ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - 8, sy - 15); ctx.arc(sx, sy - 22, 11, Math.PI * 0.8, Math.PI * 0.2, false); ctx.closePath();
@@ -2075,7 +2237,8 @@
   var W_LAND = '#150f2e', W_WATER = '#071433', W_SEA = '#050a1c';
   var W_LC = { wood: '#10253d', grass: '#122a44', farmland: '#191a3f', sand: '#2b2350', ice: '#2c3560', wetland: '#112f4a', rock: '#1f1a3c' };
   var W_LU = { residential: '#231a4a', industrial: '#2b1c40', commercial: '#2d1a49', cemetery: '#122a44', park: '#122a44' };
-  var W_ROAD = { motorway: ['#b04bff', 1.7, 4], trunk: ['#8d49e0', 1.4, 4], primary: ['#6d3fb8', 1.2, 6], secondary: ['#4f3a99', 1.0, 8], tertiary: ['#3b2e78', 0.9, 10], minor: ['#2d2360', 0.7, 12], service: ['#251c52', 0.5, 14] };
+  var W_ROAD = { motorway: ['#473582', 1.9, 4], trunk: ['#473582', 1.6, 4], primary: ['#3a2c6e', 1.4, 6], secondary: ['#3a2c6e', 1.15, 8], tertiary: ['#3a2c6e', 1.0, 10], minor: ['#2a2050', 0.8, 12], service: ['#2a2050', 0.55, 14] };
+  var W_EDGE = { motorway: '#ff2bd6', trunk: '#ffb020', primary: '#19e3ff', secondary: '#12a0b8', tertiary: '#5a4aa8' };
   var wTiles = {}, wCount = 0, wInfl = 0, wWant = [], wFrame = 0;
   var wTex = null, wTexCtx = null, wTexData = null, wTexDirty = false, wTexT = 0, wTexVer = 0;
   function mxOf(lon) { return (lon + 180) / 360; }
@@ -2217,11 +2380,21 @@
         if (!rs || z < rs[2]) continue;
         (byc[cl] || (byc[cl] = [])).push(tf);
       }
-      ['service', 'minor', 'tertiary', 'secondary', 'primary', 'trunk', 'motorway'].forEach(function (cl) {
+      var order = ['service', 'minor', 'tertiary', 'secondary', 'primary', 'trunk', 'motorway'], wsc = 0.8 + Math.max(0, z - 6) * 0.12;
+      // bordi al neon in somma di luce (agli incroci si fondono), poi il corpo della strada
+      g.save(); g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round'; g.lineCap = 'round';
+      order.forEach(function (cl) {
+        if (!byc[cl] || !W_EDGE[cl]) return;
+        g.beginPath();
+        for (var q = 0; q < byc[cl].length; q++) path(TR, byc[cl][q], false);
+        g.strokeStyle = W_EDGE[cl]; g.globalAlpha = 0.85; g.lineWidth = W_ROAD[cl][1] * wsc * 1.9 + 0.6; g.stroke();
+      });
+      g.restore();
+      order.forEach(function (cl) {
         if (!byc[cl]) return;
         g.beginPath();
         for (var q = 0; q < byc[cl].length; q++) path(TR, byc[cl][q], false);
-        g.strokeStyle = W_ROAD[cl][0]; g.lineWidth = W_ROAD[cl][1] * (0.8 + Math.max(0, z - 6) * 0.12); g.lineJoin = 'round'; g.stroke();
+        g.strokeStyle = W_ROAD[cl][0]; g.lineWidth = W_ROAD[cl][1] * wsc; g.lineJoin = 'round'; g.lineCap = 'round'; g.stroke();
       });
     }
     var BD = T.layers.boundary;
@@ -2488,7 +2661,7 @@
       gest = { t: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, a0: Math.atan2(b.y - a.y, b.x - a.x), z0: curZoom(), r0: null, moved: false };
     } else gest = null;
   }
-  var lpT = 0;
+  var lpT = 0, lpFired = false;
   cv.addEventListener('pointerdown', function (e) {
     if (!ORG || !car.has) return;
     try { cv.setPointerCapture(e.pointerId); } catch (x) {}
@@ -2499,7 +2672,7 @@
       lpT = setTimeout(function () {
         if (!gest || gest.t !== 'pan' || gest.on || Object.keys(ptrs).length !== 1) return;
         var ll = screenToLL(q0.x, q0.y);
-        if (ll) { try { navigator.vibrate && navigator.vibrate(30); } catch (x) {} openPin(ll); }
+        if (ll) { lpFired = true; try { navigator.vibrate && navigator.vibrate(30); } catch (x) {} openPin(ll); }
       }, 600);
     }
   });
@@ -2544,6 +2717,11 @@
   });
   function endPtr(e) {
     if (!ptrs[e.pointerId]) return;
+    if (e.type === 'pointerup' && state === 'preview' && alts.list.length > 1 && gest && gest.t === 'pan' && !gest.on && !lpFired && Object.keys(ptrs).length === 1) {
+      var tp = ptrs[e.pointerId], hi = hitAlt(tp.x, tp.y);
+      if (hi >= 0) selectAlt(hi);
+    }
+    lpFired = false;
     clearTimeout(lpT);
     delete ptrs[e.pointerId];
     try { cv.releasePointerCapture(e.pointerId); } catch (x) {}

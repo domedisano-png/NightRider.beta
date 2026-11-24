@@ -57,3 +57,11 @@ La posizione e le destinazioni vengono inviate a questi servizi per ottenere i d
 Non serve nessuna compilazione: sono file statici (`index.html`, `app.css`, `app.js`, `lang.js`, `sw.js`, `manifest.webmanifest`). Per provarlo in locale avvia un server nella cartella, per esempio `python3 -m http.server 8000`, e apri `http://localhost:8000`. Il GPS funziona su `localhost` e su indirizzi `https`.
 
 Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `v6` e così via), così i telefoni scaricano la versione nuova.
+
+## Novità (round 5)
+- **Nomi delle vie** letti dal livello `transportation_name` dei tile (attivabili in Mappa).
+- **Punti di interesse** (bar, ristoranti, negozi, parcheggi, distributori, ecc.) con icone neon; interruttore in Mappa.
+- **Bordi neon** delle strade su entrambe le mappe (navigazione e mondo), fusi agli incroci con composizione additiva.
+- **Zoom**: tornando verso la tua posizione la mappa del mondo ora si chiude e torna alla mappa di navigazione.
+- **Menù a sezioni** richiudibili (Percorso, Mappa, Lingua e voce, Il tuo mezzo, Autovelox e traffico, Altro, Informazioni).
+- **Pannello percorsi** dopo pressione lunga: parte compresso in basso; si alza con swipe in su o toccando un percorso sulla mappa.
