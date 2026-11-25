@@ -65,3 +65,10 @@ Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `
 - **Zoom**: tornando verso la tua posizione la mappa del mondo ora si chiude e torna alla mappa di navigazione.
 - **Menù a sezioni** richiudibili (Percorso, Mappa, Lingua e voce, Il tuo mezzo, Autovelox e traffico, Altro, Informazioni).
 - **Pannello percorsi** dopo pressione lunga: parte compresso in basso; si alza con swipe in su o toccando un percorso sulla mappa.
+
+## Novità (round 6)
+- Strade: tratti arrotondati con bordo neon e un po' di luce intorno; la strada più importante copre le altre agli incroci e nei tratti paralleli. Linee semplificate (più dritte).
+- Scelta percorso: solo tasti in basso; tempo, km e differenza compaiono sotto dopo la scelta.
+- In navigazione: scheda piccola in alto con tempo, distanza e orario di arrivo; indicazioni brevi e strette; velocità e limite in basso a sinistra senza scheda.
+- Scorciatoie sotto la ricerca (distributore, ristoranti, bar, parcheggi, ricarica, farmacie): mostrano le attività della zona (dati OpenStreetMap via Overpass).
+- Pulsanti +/−/2D-3D a destra più in basso; nuovo pulsante bandierina per le segnalazioni (traffico, incidente, ostacolo, autovelox, polizia). Le segnalazioni restano sul dispositivo per 3 ore e non sono condivise con altri utenti.

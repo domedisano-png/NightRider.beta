@@ -262,6 +262,24 @@
     for (i = 0; i < n; i++) r = Math.max(r, Math.hypot(xs[i] - cx, ys[i] - cy));
     return { xs: xs, ys: ys, n: n, cx: cx, cy: cy, sg: A > 0 ? 1 : -1, h: bHeight(e.tags || {}, e.id) * H_SCALE, r: r };
   }
+  // Douglas-Peucker: linee più dritte e regolari, meno spigoli
+  function simplifyPts(xs, ys, tol) {
+    var n = xs.length, keep = new Array(n), st = [[0, n - 1]], i;
+    for (i = 0; i < n; i++) keep[i] = false;
+    keep[0] = keep[n - 1] = true;
+    while (st.length) {
+      var se = st.pop(), a = se[0], b = se[1], dmax = 0, im = -1;
+      var dx = xs[b] - xs[a], dy = ys[b] - ys[a], l = Math.hypot(dx, dy) || 1e-9;
+      for (i = a + 1; i < b; i++) {
+        var d = Math.abs((xs[i] - xs[a]) * dy - (ys[i] - ys[a]) * dx) / l;
+        if (d > dmax) { dmax = d; im = i; }
+      }
+      if (dmax > tol && im > 0) { keep[im] = true; st.push([a, im], [im, b]); }
+    }
+    var ox = [], oy = [];
+    for (i = 0; i < n; i++) if (keep[i]) { ox.push(xs[i]); oy.push(ys[i]); }
+    return [ox, oy];
+  }
   function makeRoad(e) {
     var t = e.tags || {}, def = HW[t.highway];
     if (!def) return null;
@@ -273,6 +291,7 @@
       if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x;
       if (p.y < miny) miny = p.y; if (p.y > maxy) maxy = p.y;
     }
+    if (xs.length > 3) { var sp = simplifyPts(xs, ys, 1.6); xs = sp[0]; ys = sp[1]; }
     var li = 0, ll = 0;
     for (i = 0; i < xs.length - 1; i++) { var sl = Math.hypot(xs[i + 1] - xs[i], ys[i + 1] - ys[i]); if (sl > ll) { ll = sl; li = i; } }
     return { xs: xs, ys: ys, cls: def[0], k: def[2], w: def[1] * 1.25, nm: t.name || '', li: li, ll: ll, ms: parseMax(t.maxspeed), minx: minx, maxx: maxx, miny: miny, maxy: maxy };
@@ -1069,8 +1088,8 @@
     if (state === 'preview' && alts.list.length > 1) alts.list.forEach(function (a, i) {
       var c = document.createElement('button'); c.type = 'button'; c.className = 'chip'; c.style.setProperty('--c', a.color);
       c.setAttribute('aria-checked', i === alts.sel ? 'true' : 'false');
-      c.innerHTML = '<span class="dot"></span><b></b><small></small>';
-      c.querySelector('b').textContent = fmtDur(a.rt.dur); c.querySelector('small').textContent = fmtDist(a.rt.dist);
+      c.innerHTML = '<span class="dot"></span><b class="lb"></b>';
+      c.querySelector('b').textContent = t(a.key);
       c.addEventListener('click', function () { selectAlt(i); });
       mini.appendChild(c);
     });
@@ -1135,7 +1154,12 @@
   }
   function showMeta() {
     $('pvTitle').textContent = route.dest.name + (stops.length ? ' (+' + stops.length + ' ' + t('stopLbl').toLowerCase() + ')' : '');
-    $('pvMeta').textContent = alts.list.length > 1 && alts.sel < 0 ? ($('previewPanel').classList.contains('collapsed') ? t('sheetHint') : t('pickRoute')) : fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + ' · ' + t('lArr') + ' ' + clockAfter(route.dur);
+    $('pvMeta').textContent = alts.list.length > 1 && alts.sel < 0 ? t('pickRoute') : fmtDur(route.dur) + ' · ' + fmtDist(route.dist) + metaDiff() + ' · ' + t('lArr') + ' ' + clockAfter(route.dur);
+  }
+  function metaDiff() {
+    var a = alts.list[alts.sel]; if (!a || alts.list.length < 2) return '';
+    var dd = Math.round((a.rt.dur - a.fastDur) / 60), fd = a.fastDist !== undefined ? a.fastDist : null;
+    return dd > 0 ? ' · ' + t('altPlus').replace('{0}', dd + ' min') : (alts.sel === 0 || dd <= 0 ? ' · ' + t('altSame') : '');
   }
   var camDone = {};
   function routeCams(rt) {
@@ -1271,6 +1295,8 @@
     $('playBtn').hidden = !(sim.active && s === 'nav');
     var b = $('badge'); b.textContent = sim.active ? 'demo' : 'beta'; b.className = sim.active ? 'badge demo' : 'badge';
     if (s !== 'nav') $('alert').hidden = true;
+    if (s !== 'nav' && s !== 'arrived') $('etaCard').hidden = true;
+    if (s === 'nav' || s === 'preview') { openReport(false); if (s === 'preview') { clearCat(); } }
   }
   function movingHeading() {
     if (speedMs < 2.5 || sim.active) return null;
@@ -1335,11 +1361,12 @@
     return g ? toLL(g.x, g.y) : null;
   }
   function openPin(ll) {
-    pin = { lat: ll.lat, lon: ll.lon, name: t('pinPlace'), sub: ll.lat.toFixed(4) + ', ' + ll.lon.toFixed(4) };
+    pin = { lat: ll.lat, lon: ll.lon, name: ll.name || t('pinPlace'), sub: ll.sub || ll.lat.toFixed(4) + ', ' + ll.lon.toFixed(4) };
     $('pinTitle').textContent = pin.name; $('pinSub').textContent = pin.sub;
     $('pinStop').hidden = !(route && (state === 'preview' || state === 'nav'));
     $('pinCard').hidden = false;
     var mine = pin;
+    if (ll.name) return;
     reverseGeo(ll.lat, ll.lon).then(function (r) {
       if (pin !== mine) return;
       pin.name = r.name; pin.sub = r.sub || pin.sub; $('pinTitle').textContent = pin.name; $('pinSub').textContent = pin.sub;
@@ -1356,6 +1383,141 @@
     stops.push({ lat: pin.lat, lon: pin.lon, name: pin.name });
     closePin(); recalcStops();
   });
+
+  /* ---------- Scorciatoie attività nella zona ---------- */
+  var CATQ = {
+    fuel: '["amenity"="fuel"]', food: '["amenity"~"^(restaurant|fast_food)$"]', cafe: '["amenity"~"^(cafe|bar|pub)$"]',
+    parking: '["amenity"="parking"]["access"!~"^(private|customers)$"]', charge: '["amenity"="charging_station"]', health: '["amenity"="pharmacy"]'
+  };
+  var CATLBL = { fuel: 'qFuel', food: 'qFood', cafe: 'qBar', parking: 'qPark', charge: 'qCharge', health: 'qPharm' };
+  var catRes = null, catGen = 0;
+  function llScr(lat, lon) {
+    if (world.on || worldBlend() >= 1) { var w = wScr(lat, lon); return w.vis ? { x: w.x, y: w.y } : null; }
+    var p = toXY(lat, lon), c = cam3(p.x, p.y, 0);
+    if (c.D < NEAR * 2) return null;
+    return scr(c);
+  }
+  function setQuickUI() {
+    Array.prototype.forEach.call(document.querySelectorAll('#quick .qb'), function (b) { b.setAttribute('aria-pressed', catRes && catRes.cat === b.dataset.cat ? 'true' : 'false'); });
+  }
+  function clearCat() { catGen++; catRes = null; setQuickUI(); }
+  function fitPoints(pts) {
+    if (!pts.length || !ORG) return;
+    var mnx = 1e12, mxx = -1e12, mny = 1e12, mxy = -1e12, i;
+    pts.forEach(function (p) { var q = toXY(p.lat, p.lon); mnx = Math.min(mnx, q.x); mxx = Math.max(mxx, q.x); mny = Math.min(mny, q.y); mxy = Math.max(mxy, q.y); });
+    var w = mxx - mnx, h = mxy - mny, mx = (mnx + mxx) / 2, my = (mny + mxy) / 2;
+    world.on = false;
+    view.free = true; view.fx = mx; view.fy = my; rcBtn.hidden = false;
+    if (is2D()) {
+      var hc = (Math.max(w * 1.4 / W, h * 1.4 / (H * 0.7)) + 0.0001) * Math.min(W * 1.25, H * 1.05);
+      view.z2 = Math.min(ZMAX2 * 0.8, Math.max(ZMIN2, hc / (HC * 6)));
+    } else view.z3 = Math.min(ZMAX3, Math.max(6, Math.hypot(w, h) / 130));   // vista quasi dall'alto per vedere tutti i punti
+    touch();
+  }
+  function catSearch(cat) {
+    if (catRes && catRes.cat === cat) { clearCat(); return; }
+    if (!ORG || !car.has) { toast(t('gpsWaitLine')); return; }
+    var my = ++catGen, ll = toLL(car.x, car.y), dLat = 0.025, dLon = 0.025 / Math.max(0.2, Math.cos(ll.lat * Math.PI / 180));
+    catRes = { cat: cat, items: [], loading: true }; setQuickUI(); toast(t('qLoad'), 15000);
+    var bb = bboxStr(ll.lat - dLat, ll.lon - dLon, ll.lat + dLat, ll.lon + dLon);
+    function done(items) {
+      if (my !== catGen) return;
+      items.forEach(function (it) { it.d = Math.hypot(it.lat - ll.lat, (it.lon - ll.lon) * Math.cos(ll.lat * Math.PI / 180)); });
+      items.sort(function (a, b) { return a.d - b.d; });
+      items = items.slice(0, 60);
+      catRes = { cat: cat, items: items };
+      if (!items.length) { toast(t('qNone')); return; }
+      $('toast').hidden = true;
+      fitPoints(items.slice(0, 18).concat([{ lat: ll.lat, lon: ll.lon }]));
+    }
+    function fromCells() {
+      var out = [], c, k;
+      for (c = 0; c < cellList.length; c++) (cellList[c].p || []).forEach(function (q) {
+        if (q.c !== cat) return;
+        var p = toLL(q.x, q.y); out.push({ lat: p.lat, lon: p.lon, name: q.nm || '' });
+      });
+      return out;
+    }
+    overpass('[out:json][timeout:20];nwr' + CATQ[cat] + '(' + bb + ');out center tags 120;', 'attività').then(function (j) {
+      var items = [], seen = {};
+      (j.elements || []).forEach(function (e) {
+        var la = e.lat !== undefined ? e.lat : e.center && e.center.lat, lo = e.lon !== undefined ? e.lon : e.center && e.center.lon;
+        if (la === undefined || lo === undefined) return;
+        var tg = e.tags || {}, key = la.toFixed(4) + ',' + lo.toFixed(4);
+        if (seen[key]) return; seen[key] = 1;
+        items.push({ lat: la, lon: lo, name: tg.name || tg.brand || tg.operator || '' });
+      });
+      done(items.length ? items : fromCells());
+    }, function () { done(fromCells()); });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#quick .qb'), function (b) {
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', function () { catSearch(b.dataset.cat); });
+  });
+  function drawCat() {
+    if (!catRes || !catRes.items.length) return;
+    var placed = [], i, k;
+    ctx.save();
+    for (i = 0; i < catRes.items.length && placed.length < 45; i++) {
+      var it = catRes.items[i], sp = llScr(it.lat, it.lon);
+      if (!sp || sp.x < 6 || sp.x > W - 6 || sp.y < 40 || sp.y > H - 6) continue;
+      var hit = false;
+      for (k = 0; k < placed.length; k++) if (Math.abs(placed[k].x - sp.x) < 22 && Math.abs(placed[k].y - sp.y) < 22) { hit = true; break; }
+      if (hit) continue;
+      placed.push(sp);
+      ctx.shadowColor = POI_COL[catRes.cat]; ctx.shadowBlur = 10;
+      poiIcon(catRes.cat, sp.x, sp.y, 13);
+      ctx.shadowBlur = 0;
+      if (it.name && placed.length <= 22) {
+        ctx.font = '700 11px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        var nm = it.name.length > 22 ? it.name.slice(0, 21) + '…' : it.name;
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,4,22,0.92)'; ctx.strokeText(nm, sp.x, sp.y + 16);
+        ctx.fillStyle = '#efeaff'; ctx.fillText(nm, sp.x, sp.y + 16);
+      }
+    }
+    ctx.restore();
+  }
+  function hitCat(sx, sy) {
+    if (!catRes) return null;
+    var best = null, bd = 26;
+    catRes.items.forEach(function (it) { var sp = llScr(it.lat, it.lon); if (!sp) return; var d = Math.hypot(sp.x - sx, sp.y - sy); if (d < bd) { bd = d; best = it; } });
+    return best;
+  }
+
+  /* ---------- Segnalazioni (salvate su questo dispositivo) ---------- */
+  var REP = { traffic: ['#ffb020', '≡'], crash: ['#ff3b4e', '!'], obst: ['#f7e733', '▲'], cam: ['#ff2bd6', '●'], police: ['#19e3ff', '★'] };
+  var REP_KEY = 'nightrider.app.reports', reports = [];
+  try { reports = JSON.parse(localStorage.getItem(REP_KEY) || '[]').filter(function (r) { return r && Date.now() - r.ts < 3 * 3600e3; }); } catch (e) { reports = []; }
+  function saveReports() { try { localStorage.setItem(REP_KEY, JSON.stringify(reports.slice(-80))); } catch (e) {} }
+  function hereLL() { return ORG && car.has ? toLL(car.x, car.y) : null; }
+  function openReport(open) {
+    $('repCard').hidden = !open;
+    if (open) { closePin(); }
+  }
+  $('reportBtn').addEventListener('click', function () { openReport($('repCard').hidden); });
+  $('repX').addEventListener('click', function () { openReport(false); });
+  Array.prototype.forEach.call(document.querySelectorAll('#repCard .rb'), function (b) {
+    b.addEventListener('click', function () {
+      var ll = hereLL();
+      if (!ll) { toast(t('gpsWaitLine')); return; }
+      reports.push({ t: b.dataset.rep, lat: ll.lat, lon: ll.lon, ts: Date.now() }); saveReports();
+      openReport(false); toast(t('repDone') + ': ' + t(({ traffic: 'repTraffic', crash: 'repCrash', obst: 'repObst', cam: 'repCam', police: 'repPolice' })[b.dataset.rep]));
+      if (prefs.voice && state === 'nav') speak(t('repDone') + '.');
+    });
+  });
+  function drawReports() {
+    var now = Date.now(), i;
+    for (i = 0; i < reports.length; i++) {
+      var r = reports[i]; if (now - r.ts > 3 * 3600e3) continue;
+      var sp = llScr(r.lat, r.lon); if (!sp || sp.x < 0 || sp.x > W || sp.y < 30 || sp.y > H) continue;
+      var d = REP[r.t] || REP.obst;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, 12, 0, 6.2832); ctx.fillStyle = 'rgba(10,6,24,0.92)'; ctx.fill();
+      ctx.lineWidth = 2.4; ctx.strokeStyle = d[0]; ctx.shadowColor = d[0]; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+      ctx.fillStyle = d[0]; ctx.font = '800 13px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(d[1], sp.x, sp.y + 0.5);
+      ctx.restore();
+    }
+  }
   function checkStops() {
     for (var i = 0; i < stops.length; i++) {
       var q = toXY(stops[i].lat, stops[i].lon);
@@ -1528,7 +1690,7 @@
         els.tstreet.textContent = t('arrivedT'); els.voice.textContent = t('reached', route.dest.name); els.tdist.textContent = fmtDist(0);
       } else {
         if (lastIcon !== ds.icon) { els.ticon.innerHTML = ICONS[ds.icon]; lastIcon = ds.icon; }
-        els.tstreet.textContent = man.type === 'arrive' ? route.dest.name : (man.name ? t('onSt', man.name) : ds.text.charAt(0).toUpperCase() + ds.text.slice(1));
+        els.tstreet.textContent = man.type === 'arrive' ? route.dest.name : (man.name ? man.name : ds.text.charAt(0).toUpperCase() + ds.text.slice(1));
         els.voice.textContent = leadText(man, m, false) + ds.text + '.';
         els.tdist.textContent = fmtDist(m);
       }
@@ -1536,6 +1698,7 @@
       setRow(1, t('lArr'), state === 'arrived' ? '--:--' : clockAfter(sec), 'arr');
       setRow(2, t('lLeft'), state === 'arrived' ? '0 ' + t('min') : fmtDur(sec));
       setRow(3, t('lDist'), fmtDist(rem));
+      $('etaCard').hidden = false; $('etaT').textContent = state === 'arrived' ? '0 ' + t('min') : fmtDur(sec); $('etaD').textContent = fmtDist(rem); $('etaA').textContent = state === 'arrived' ? '' : clockAfter(sec);
       cam = state === 'nav' ? camAhead() : null;
     } else {
       setRow(1, t('lGps'), gpsText);
@@ -1903,7 +2066,8 @@
     ctx.fillStyle = GROUND_BASE; ctx.fill();
     drawGround(R);
 
-    // strade per tipo: base scura come prima, bordo esterno al neon in base alla classe
+    // strade per tipo, dalla meno alla più importante: alone neon + bordo + corpo, tratti arrotondati.
+    // La strada più importante copre le altre: agli incroci e nei tratti paralleli vince il suo colore.
     var vis = [[], [], [], [], [], []], V2 = R + 80 * Math.max(1, zf), wk = Math.max(1, cm.Hc / (420 + 230 * cm.s));
     for (c = 0; c < cellList.length; c++) {
       var rs = cellList[c].r;
@@ -1914,42 +2078,53 @@
       }
     }
     var colors = [ROAD_MINOR, ROAD_MAJOR, ROAD_MAJOR, ROAD_MAJOR, ROAD_MOTORWAY, ROAD_MOTORWAY];
-    function roadPath(list, mul) {
-      ctx.beginPath();
-      for (var kk = 0; kk < list.length; kk++) {
-        var r = list[kk];
-        for (var ii = 0; ii < r.xs.length - 1; ii++) {
-          if (Math.abs(r.xs[ii] - fc.x) > V2 && Math.abs(r.ys[ii] - fc.y) > V2) continue;
-          addPoly(seg(r.xs[ii], r.ys[ii], r.xs[ii + 1], r.ys[ii + 1], r.w * wk * mul, 0));
+    // raccoglie i segmenti in schermo, raggruppati per larghezza (in pixel) per fare pochi tratti
+    function roadBuckets(list, mul) {
+      var bk = {}, kk, ii;
+      for (kk = 0; kk < list.length; kk++) {
+        var r = list[kk], pa = null;
+        for (ii = 0; ii < r.xs.length; ii++) {
+          var cc = cam3(r.xs[ii], r.ys[ii], 0);
+          if (ii && !(cc.D < NEAR && pa.D < NEAR) && (Math.abs(r.xs[ii] - fc.x) <= V2 || Math.abs(r.ys[ii] - fc.y) <= V2)) {
+            var q0 = pa, q1 = cc;
+            if (q0.D < NEAR || q1.D < NEAR) {
+              var tt = (NEAR - q0.D) / (q1.D - q0.D);
+              var mid = { X: q0.X + (q1.X - q0.X) * tt, D: NEAR, U: q0.U + (q1.U - q0.U) * tt };
+              if (q0.D < NEAR) q0 = mid; else q1 = mid;
+            }
+            var s0 = scr(q0), s1 = scr(q1), wpx = r.w * wk * mul * cm.F / ((q0.D + q1.D) / 2);
+            var key = Math.max(1, Math.round(wpx * 2)) / 2;
+            (bk[key] || (bk[key] = [])).push(s0.x, s0.y, s1.x, s1.y);
+          }
+          pa = cc;
         }
       }
+      return bk;
     }
-    // 1) tutti i bordi insieme, in somma di luce: agli incroci i colori si fondono e non si coprono a vicenda
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (var kd = 1; kd < 6; kd++) {
-      if (!vis[kd].length) continue;
-      roadPath(vis[kd], 1.6);
-      ctx.globalAlpha = kd >= 3 ? 0.9 : 0.75; ctx.fillStyle = EDGE[kd];
-      if (kd >= 3) { ctx.shadowColor = EDGE[kd]; ctx.shadowBlur = 9; }
-      ctx.fill(); ctx.shadowBlur = 0;
-    }
-    ctx.restore();
-    // 2) poi il corpo della strada: unisce gli incroci in un'unica superficie, i bordi restano solo all'esterno
-    for (kd = 0; kd < 6; kd++) {
-      if (kd === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
-      if (!vis[kd].length) continue;
-      roadPath(vis[kd], 1);
-      ctx.fillStyle = colors[kd]; ctx.fill();
-    }
-    ctx.beginPath();
-    for (kd = 3; kd < 6; kd++) for (k = 0; k < vis[kd].length; k++) {
-      var r2 = vis[kd][k];
-      for (i = 0; i < r2.xs.length - 1; i++) {
-        if (Math.abs(r2.xs[i] - fc.x) > R && Math.abs(r2.ys[i] - fc.y) > R) continue;
-        addPoly(seg(r2.xs[i], r2.ys[i], r2.xs[i + 1], r2.ys[i + 1], 0.9 * wk, 0));
+    function strokeBuckets(bk, extra, color, alpha) {
+      ctx.strokeStyle = color; ctx.globalAlpha = alpha;
+      for (var key in bk) {
+        var a2 = bk[key], w2 = +key + extra;
+        ctx.lineWidth = w2; ctx.beginPath();
+        for (var m = 0; m < a2.length; m += 4) { ctx.moveTo(a2[m], a2[m + 1]); ctx.lineTo(a2[m + 2], a2[m + 3]); }
+        ctx.stroke();
       }
     }
-    ctx.globalAlpha = 0.3; ctx.fillStyle = C.yel; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (var kd = 0; kd < 6; kd++) {
+      if (!vis[kd].length) continue;
+      if (kd === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
+      var bk0 = roadBuckets(vis[kd], 1);
+      if (kd > 0) {
+        var ew = kd >= 3 ? 3.2 : 2.2;              // spessore del bordo in pixel (somma dei due lati)
+        if (kd >= 2) strokeBuckets(bk0, ew + (kd >= 3 ? 9 : 6), EDGE[kd], kd >= 3 ? 0.16 : 0.11);   // luce intorno
+        strokeBuckets(bk0, ew + 1.5, EDGE[kd], kd >= 3 ? 0.35 : 0.3);                            // sfumatura del neon
+        strokeBuckets(bk0, ew, EDGE[kd], 1);                                                      // bordo netto
+      }
+      strokeBuckets(bk0, 0, colors[kd], 1);
+      if (kd >= 3) strokeBuckets(roadBuckets(vis[kd], 0.12), 0, C.yel, 0.3);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
 
     // percorso
     if (route) drawRoute();
@@ -2120,6 +2295,7 @@
     ctx.restore();
   }
   function drawPins() {
+    if (typeof drawCat === 'function') { drawCat(); drawReports(); }
     var list = stops.map(function (q, i) { return { lat: q.lat, lon: q.lon, l: String(i + 1), c: C.yel }; });
     if (pin) list.push({ lat: pin.lat, lon: pin.lon, l: '', c: C.cyan });
     for (var i = 0; i < list.length; i++) {
@@ -2381,21 +2557,23 @@
         (byc[cl] || (byc[cl] = [])).push(tf);
       }
       var order = ['service', 'minor', 'tertiary', 'secondary', 'primary', 'trunk', 'motorway'], wsc = 0.8 + Math.max(0, z - 6) * 0.12;
-      // bordi al neon in somma di luce (agli incroci si fondono), poi il corpo della strada
-      g.save(); g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round'; g.lineCap = 'round';
-      order.forEach(function (cl) {
-        if (!byc[cl] || !W_EDGE[cl]) return;
-        g.beginPath();
-        for (var q = 0; q < byc[cl].length; q++) path(TR, byc[cl][q], false);
-        g.strokeStyle = W_EDGE[cl]; g.globalAlpha = 0.85; g.lineWidth = W_ROAD[cl][1] * wsc * 1.9 + 0.6; g.stroke();
-      });
-      g.restore();
+      // dalla meno alla più importante: alone, bordo neon e corpo; la strada più importante copre le altre
+      g.save(); g.lineJoin = 'round'; g.lineCap = 'round';
       order.forEach(function (cl) {
         if (!byc[cl]) return;
+        var bw = W_ROAD[cl][1] * wsc;
         g.beginPath();
         for (var q = 0; q < byc[cl].length; q++) path(TR, byc[cl][q], false);
-        g.strokeStyle = W_ROAD[cl][0]; g.lineWidth = W_ROAD[cl][1] * wsc; g.lineJoin = 'round'; g.lineCap = 'round'; g.stroke();
+        var pth = null;
+        if (W_EDGE[cl]) {
+          g.strokeStyle = W_EDGE[cl];
+          g.globalAlpha = 0.14; g.lineWidth = bw + 5; g.stroke();
+          g.globalAlpha = 0.35; g.lineWidth = bw + 2.6; g.stroke();
+          g.globalAlpha = 1; g.lineWidth = bw + 1.6; g.stroke();
+        }
+        g.globalAlpha = 1; g.strokeStyle = W_ROAD[cl][0]; g.lineWidth = bw; g.stroke();
       });
+      g.restore();
     }
     var BD = T.layers.boundary;
     if (BD) {
@@ -2721,6 +2899,10 @@
       var tp = ptrs[e.pointerId], hi = hitAlt(tp.x, tp.y);
       if (hi >= 0) selectAlt(hi);
     }
+    if (e.type === 'pointerup' && catRes && !lpFired && gest && gest.t === 'pan' && !gest.on && Object.keys(ptrs).length === 1) {
+      var tp2 = ptrs[e.pointerId], hc2 = hitCat(tp2.x, tp2.y);
+      if (hc2) openPin({ lat: hc2.lat, lon: hc2.lon, name: hc2.name || t(CATLBL[catRes.cat]), sub: t(CATLBL[catRes.cat]) });
+    }
     lpFired = false;
     clearTimeout(lpT);
     delete ptrs[e.pointerId];
@@ -2799,6 +2981,7 @@
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
   window.__nightrider = {
+    cat: function () { return catRes && { cat: catRes.cat, n: catRes.items.length, loading: !!catRes.loading, z2: view.z2, free: view.free, fx: view.fx, fy: view.fy, sp: catRes.items[0] && llScr(catRes.items[0].lat, catRes.items[0].lon) }; },
     info: function () { return { state: state, gps: gps, here: here, route: route && { total: route.total, man: route.man.length, cams: route.cams.length }, prog: prog, cells: cellList.length, cams: camList.length, speed: speedMs, limit: limitNow, maxB: maxB, free: view.free, world: { on: world.on, z: world.z, mx: world.mx, my: world.my }, z3: view.z3, z2: view.z2, d2: is2D(), car: { x: car.x, y: car.y }, trail: route ? (function () { var pr = projectOnRoute(route, car.x, car.y, prog.idx, false); return { d: pr.d, dist: pr.dist }; })() : null }; },
     xcheck: function (lat, lon) {
       var p = toXY(lat, lon), c = cam3(p.x, p.y, 0), l = scr(c), sv = { x: WX.sx, y: WX.sy, ang: WX.ang, mx: WX.mx, my: WX.my, z: WX.z };

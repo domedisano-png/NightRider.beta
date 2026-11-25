@@ -19,11 +19,26 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="q-fuel" viewBox="0 0 24 24"><path d="M5 20V5h9v15M3 20h13M14 9h2.5a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 0 3 0V8l-3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 8h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="q-food" viewBox="0 0 24 24"><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M17 3c-2.5 1.5-3 5-3 8h3v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="q-cafe" viewBox="0 0 24 24"><path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h2a2.5 2.5 0 0 1 0 5h-2M8 3v2M12 3v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="q-park" viewBox="0 0 24 24"><path d="M9 20V5h5a4 4 0 0 1 0 8H9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="q-charge" viewBox="0 0 24 24"><path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="q-health" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></symbol>
+  <symbol id="r-traffic" viewBox="0 0 24 24"><path d="M3 16l4-8h10l4 8M3 16h18M7 19v-3M17 19v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="r-crash" viewBox="0 0 24 24"><path d="M12 3l9 16H3z M12 9v5M12 16.5v.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="r-obst" viewBox="0 0 24 24"><path d="M3 20h18M6 20l2-10h8l2 10M9 14h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="r-cam" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></symbol>
+  <symbol id="r-police" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 11.5l2.2 2.2L15 9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="r-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
 <div id="app" data-state="idle">
   <canvas id="map" role="img" data-i18n-aria="aMap" aria-label="Mappa a tema neon con il percorso evidenziato in azzurro"></canvas>
 
   <header class="top">
     <div class="bar">
+      <div class="etacard" id="etaCard" hidden aria-label="Arrivo"><b id="etaT"></b><span id="etaD"></span><span id="etaA"></span></div>
       <div class="brandpill"><span class="brand">NightRider</span><span class="badge" id="badge">beta</span></div>
       <div class="bar-btns">
         <button type="button" class="round" id="playBtn" aria-label="Pausa simulazione" hidden></button>
@@ -42,6 +57,14 @@
         <label class="sr" for="q" data-i18n="phQ">Dove vuoi andare?</label>
         <input id="q" type="search" data-i18n-ph="phQ" placeholder="Dove vuoi andare?" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false">
       </form>
+      <div class="quick" id="quick" role="group" aria-label="Attività vicine">
+        <button type="button" class="qb" data-cat="fuel" data-i18n-aria="qFuel" aria-label="Distributore"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-fuel"/></svg></button>
+        <button type="button" class="qb" data-cat="food" data-i18n-aria="qFood" aria-label="Ristoranti"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-food"/></svg></button>
+        <button type="button" class="qb" data-cat="cafe" data-i18n-aria="qBar" aria-label="Bar"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-cafe"/></svg></button>
+        <button type="button" class="qb" data-cat="parking" data-i18n-aria="qPark" aria-label="Parcheggi"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-park"/></svg></button>
+        <button type="button" class="qb" data-cat="charge" data-i18n-aria="qCharge" aria-label="Ricarica"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-charge"/></svg></button>
+        <button type="button" class="qb" data-cat="health" data-i18n-aria="qPharm" aria-label="Farmacie"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-health"/></svg></button>
+      </div>
       <ul class="results" id="results" aria-live="polite"></ul>
       <p class="note" id="gpsLine" data-i18n="gpsWait">In attesa del GPS…</p>
       <button type="button" class="btn" id="demoBtn" data-i18n="demoBtn" hidden>Prova da una posizione di esempio (Milano)</button>
@@ -67,9 +90,20 @@
     <button type="button" class="round" id="zoomIn" data-i18n-aria="zIn" aria-label="Avvicina la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
     <button type="button" class="round" id="zoomOut" data-i18n-aria="zOut" aria-label="Allontana la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
     <button type="button" class="round txt" id="modeBtn" aria-label="2D / 3D">3D</button>
+    <button type="button" class="round" id="reportBtn" data-i18n-aria="rep" aria-label="Segnala" style="color:#ffb020"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#r-flag"/></svg></button>
     <button type="button" class="round" id="recenterBtn" data-i18n-aria="recenter" aria-label="Torna alla mia posizione" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
   </div>
   <div class="bottom">
+    <section class="panel repcard" id="repCard" hidden aria-label="Segnalazione">
+      <div class="repttl"><span id="repTitle" data-i18n="repTitle">Cosa vuoi segnalare?</span><button type="button" class="rx" id="repX" aria-label="Chiudi">✕</button></div>
+      <div class="repgrid">
+        <button type="button" class="rb" data-rep="traffic" style="--c:#ffb020"><svg viewBox="0 0 24 24"><use href="#r-traffic"/></svg><span data-i18n="repTraffic">Traffico</span></button>
+        <button type="button" class="rb" data-rep="crash" style="--c:#ff3b4e"><svg viewBox="0 0 24 24"><use href="#r-crash"/></svg><span data-i18n="repCrash">Incidente</span></button>
+        <button type="button" class="rb" data-rep="obst" style="--c:#f7e733"><svg viewBox="0 0 24 24"><use href="#r-obst"/></svg><span data-i18n="repObst">Ostacolo</span></button>
+        <button type="button" class="rb" data-rep="cam" style="--c:#ff2bd6"><svg viewBox="0 0 24 24"><use href="#r-cam"/></svg><span data-i18n="repCam">Autovelox</span></button>
+        <button type="button" class="rb" data-rep="police" style="--c:#19e3ff"><svg viewBox="0 0 24 24"><use href="#r-police"/></svg><span data-i18n="repPolice">Polizia</span></button>
+      </div>
+    </section>
     <section class="panel pincard" id="pinCard" hidden>
       <div class="pv-title" id="pinTitle"></div>
       <div class="note" id="pinSub"></div>
