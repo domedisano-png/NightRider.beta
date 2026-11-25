@@ -61,11 +61,25 @@
     carIcon: 'arrow', carColor: '#f7e733',
     voice: true, voiceTurn: true, voiceCam: true, voiceName: '', voiceStyle: 'natural', volume: 0.9,
     cams: true, gloss: true, theme: 'fuchsia', tilt: 0.6, view2d: false,
-    lang: detectLang(), persona: 'cyber', roadNames: true, pois: true, voiceAll: false, ttKey: '',
-    units: 'km', wake: true, simMult: 3
+    lang: detectLang(), persona: 'cyber', roadNames: true, pois: true, voiceAll: false, ttKey: '', hereKey: '', liveInc: true,
+    units: 'km', wake: true, simMult: 3,
+    quick: ['fuel', 'food', 'cafe', 'hotel', 'mech']
   };
+  var QCATS = [
+    { id: 'fuel', sym: 'q-fuel', lbl: 'qFuel', q: '["amenity"="fuel"]' },
+    { id: 'food', sym: 'q-food', lbl: 'qFood', q: '["amenity"~"^(restaurant|fast_food)$"]' },
+    { id: 'cafe', sym: 'q-cafe', lbl: 'qBar', q: '["amenity"~"^(cafe|bar|pub)$"]' },
+    { id: 'parking', sym: 'q-park', lbl: 'qPark', q: '["amenity"="parking"]["access"!~"^(private|customers)$"]' },
+    { id: 'charge', sym: 'q-charge', lbl: 'qCharge', q: '["amenity"="charging_station"]' },
+    { id: 'health', sym: 'q-health', lbl: 'qPharm', q: '["amenity"="pharmacy"]' },
+    { id: 'hotel', sym: 'q-hotel', lbl: 'qHotel', q: '["tourism"~"^(hotel|motel|guest_house|hostel)$"]' },
+    { id: 'mech', sym: 'q-mech', lbl: 'qMech', q: '["shop"~"^(car_repair|tyres)$"]' },
+    { id: 'shop', sym: 'q-shop', lbl: 'qShop', q: '["shop"~"^(supermarket|convenience|bakery|mall)$"]' },
+    { id: 'money', sym: 'q-money', lbl: 'qMoney', q: '["amenity"~"^(bank|atm)$"]' },
+    { id: 'sight', sym: 'q-sight', lbl: 'qSight', q: '["tourism"~"^(attraction|museum|viewpoint)$"]' }
+  ];
   var prefs = {};
-  function resetPrefs() { for (var k in DEFAULTS) prefs[k] = DEFAULTS[k]; }
+  function resetPrefs() { for (var k in DEFAULTS) prefs[k] = Array.isArray(DEFAULTS[k]) ? DEFAULTS[k].slice() : DEFAULTS[k]; }
   resetPrefs();
   try {
     var saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -94,6 +108,7 @@
     for (i = 0; i < n.length; i++) { el = n[i]; el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph'))); }
     var title = $('endBtn'); if (title) title.title = t('endAria');
     $('menuBtn').title = t('menuAria');
+    if (typeof renderQuick === 'function' && typeof POI_COL !== 'undefined') renderQuick();
   }
 
   /* ---------- Proiezione locale ---------- */
@@ -311,7 +326,7 @@
     var out = { b: [], r: [], n: 0 }, els = json.elements || [];
     for (var k = 0; k < els.length; k++) {
       var e = els[k], t = e.tags || {};
-      if (e.type === 'node') { if (t.highway === 'speed_camera' || t.enforcement === 'maxspeed' || t.enforcement === 'average_speed') addCam(e); continue; }
+      if (e.type === 'node') { if (t.highway === 'speed_camera' || t.enforcement === 'maxspeed' || t.enforcement === 'average_speed' || t.enforcement === 'speed') addCam(e); continue; }
       if (e.type !== 'way' || !e.geometry || e.geometry.length < 2) continue;
       var id = 'w' + e.id;
       if (SEEN[id]) continue;
@@ -617,7 +632,7 @@
     }
     if (PO) for (i = 0; i < PO.feats.length; i++) {
       var pf = PO.feats[i]; if (pf.type !== 1) continue;
-      var pp = T.props(PO, pf), cat = poiCat(pp['class'], pp.subclass);
+      var pp = T.props(PO, pf), cat = poiCat(pp['class'], pp.subclass) || (pp.name ? 'biz' : '');
       if (!cat) continue;
       var pg = T.geom(pf); if (!pg.length) continue;
       var pq = pt(pg[0][0], pg[0][1], PO.ext), pw = toXY(pq.lat, pq.lon);
@@ -627,6 +642,7 @@
   }
   var OMT_KIND = { motorway: 5, trunk: 4, primary: 3, secondary: 2, tertiary: 1, minor: 0, service: 0 };
   function poiCat(c, sc) {
+    if (c === 'car_repair' || sc === 'car_repair' || sc === 'tyres' || c === 'car_wash') return 'mech';
     if (c === 'fuel') return 'fuel';
     if (c === 'parking' || sc === 'parking') return 'parking';
     if (c === 'restaurant' || c === 'fast_food' || sc === 'restaurant' || sc === 'fast_food') return 'food';
@@ -732,7 +748,7 @@
   }
   function extraQuery(i, j) {
     var S = j * XD_LAT, W = i * XD_LON, bb = bboxStr(S, W, S + XD_LAT, W + XD_LON);
-    return '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed)$"](' + bb + ');way["highway"~"' + HW_RE + '"]["maxspeed"](' + bb + '););out geom qt;';
+    return '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed|speed)$"](' + bb + ');way["highway"~"' + HW_RE + '"]["maxspeed"](' + bb + '););out geom qt;';
   }
   function wantExtra(i, j) {
     var key = i + ',' + j, xc = xcells[key];
@@ -962,7 +978,6 @@
     routes.forEach(function (r) {
       var v;
       if (prefs.routeType === 'short') { if (r.duration > fastest * 1.3) return; v = r.distance + r.duration * 0.001; }
-      else if (prefs.routeType === 'simple') { if (r.duration > fastest * 1.35) return; var n = 0; (r.legs || []).forEach(function (l) { n += (l.steps || []).length; }); v = n * 1e6 + r.duration; }
       else v = r.duration;
       if (v < bv) { bv = v; best = r; }
     });
@@ -1091,9 +1106,9 @@
   }
   /* Alternative: scarta i duplicati e ne sceglie fino a 3 davvero diverse, etichettate per carattere */
   function nSteps(r) { var n = 0; (r.legs || []).forEach(function (l) { n += (l.steps || []).length; }); return n; }
-  function sameGeom(a, b) {
-    if (Math.abs(a.distance - b.distance) / Math.max(a.distance, 1) > 0.05) return false;
-    var A = a.geometry.coordinates, B = b.geometry.coordinates, k = 24, hit = 0, i, j;
+  /* quota del percorso a che corre entro 60 m dal percorso b (0..1) */
+  function geomShare(a, b) {
+    var A = a.geometry.coordinates, B = b.geometry.coordinates, k = 40, hit = 0, i, j;
     for (i = 0; i < k; i++) {
       var p = A[Math.floor(i * (A.length - 1) / (k - 1))], best = 1e9, c = Math.cos(p[1] * Math.PI / 180);
       for (j = 0; j < B.length; j++) {
@@ -1102,8 +1117,9 @@
       }
       if (best < 3600) hit++;
     }
-    return hit / k >= 0.88;
+    return hit / k;
   }
+  function sameGeom(a, b) { return Math.abs(a.distance - b.distance) / Math.max(a.distance, 1) <= 0.05 && geomShare(a, b) >= 0.88; }
   function distinctRoutes(routes) {
     var sorted = routes.slice().sort(function (a, b) { return a.duration - b.duration; }), uniq = [];
     sorted.forEach(function (r) {
@@ -1112,31 +1128,35 @@
     });
     return uniq;
   }
+  /* una alternativa compare solo se è davvero diversa E ha un motivo per esistere */
+  function validAlts(uniq) {
+    var f = uniq[0], out = [f];
+    if (f.duration < 180) return out;
+    var maxExtra = Math.min(2700, Math.max(420, f.duration * 0.3));
+    uniq.slice(1).sort(function (a, b) { return a.duration - b.duration; }).forEach(function (r) {
+      if (out.length >= 3) return;
+      var extra = r.duration - f.duration;
+      if (extra > maxExtra) return;
+      var shorter = r.distance < f.distance * 0.97 && f.distance - r.distance > 400;
+      var lessTraffic = (f._delay || 0) - (r._delay || 0) > 180;
+      var nearEqual = extra <= Math.min(300, f.duration * 0.1);
+      if (!(shorter || lessTraffic || r._nohw || nearEqual)) return;
+      for (var i = 0; i < out.length; i++) if (geomShare(r, out[i]) >= 0.8 && geomShare(out[i], r) >= 0.8) return;
+      out.push(r);
+    });
+    return out;
+  }
   function makeAlts(routes, dest) {
-    var uniq = distinctRoutes(routes);
-    var fastest = uniq[0], shortest = uniq[0], simple = uniq[0], nohw = null;
-    uniq.forEach(function (r) {
-      if (r.distance < shortest.distance) shortest = r;
-      if (r.duration <= fastest.duration * 1.6 && (nSteps(r) < nSteps(simple) || (nSteps(r) === nSteps(simple) && r.duration < simple.duration))) simple = r;
-      if (r._nohw && !nohw) nohw = r;
-    });
-    var order = prefs.routeType === 'short' ? [shortest, fastest, simple, nohw] : prefs.routeType === 'simple' ? [simple, fastest, shortest, nohw] : [fastest, shortest, simple, nohw];
-    var pick = [];
-    order.concat(uniq).forEach(function (r) {
-      if (!r || pick.length >= 3 || pick.indexOf(r) >= 0) return;
-      if (r !== fastest && r.duration > fastest.duration * 2) return;
-      pick.push(r);
-    });
-    var lead = prefs.routeType === 'short' ? shortest : prefs.routeType === 'simple' ? simple : fastest;
+    var uniq = distinctRoutes(routes), pick = validAlts(uniq), fastest = uniq[0], shortest = pick[0];
+    pick.forEach(function (r) { if (r.distance < shortest.distance) shortest = r; });
+    if (prefs.routeType === 'short' && shortest !== pick[0]) { pick.splice(pick.indexOf(shortest), 1); pick.unshift(shortest); }
     var colors = ['#19e3ff', '#ff2bd6', '#ffd23f'], used = {};
     return pick.map(function (r, i) {
       var key = 'altOther';
-      if (r === lead) key = prefs.routeType === 'short' ? 'altShort' : prefs.routeType === 'simple' ? 'altSimple' : 'altFast';
-      else if (r === fastest) key = 'altFast';
-      else if (r === shortest) key = 'altShort';
-      else if (r === simple) key = 'altSimple';
+      if (r === fastest) key = 'altFast';
+      else if (r === shortest && shortest.distance < fastest.distance * 0.97) key = 'altShort';
       else if (r._nohw) key = 'altNoHw';
-      if (used[key]) key = r._nohw ? 'altNoHw' : 'altOther';
+      if (used[key]) key = 'altOther';
       used[key] = 1;
       var rt = buildRoute(r, dest);
       rt.turns = nSteps(r); rt.delay = r._delay || 0;
@@ -1237,7 +1257,7 @@
     function worker() {
       if (idx >= list.length) return Promise.resolve();
       var c = list[idx++], bb = bboxStr(c[1] * DL - pad, c[0] * DN - pad, (c[1] + 1) * DL + pad, (c[0] + 1) * DN + pad);
-      var q = '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed)$"](' + bb + '););out body;';
+      var q = '[out:json][timeout:25];(node["highway"="speed_camera"](' + bb + ');node["enforcement"~"^(maxspeed|average_speed|speed)$"](' + bb + '););out body;';
       return overpass(q, 'autovelox').then(function (j) { parseOsm(j); attachCams(rt); }, function () {}).then(worker);
     }
     return Promise.all([worker(), worker()]).then(function () { attachCams(rt); alts.list.forEach(function (a) { attachCams(a.rt); }); renderAlts(); });
@@ -1453,11 +1473,8 @@
   });
 
   /* ---------- Scorciatoie attività nella zona ---------- */
-  var CATQ = {
-    fuel: '["amenity"="fuel"]', food: '["amenity"~"^(restaurant|fast_food)$"]', cafe: '["amenity"~"^(cafe|bar|pub)$"]',
-    parking: '["amenity"="parking"]["access"!~"^(private|customers)$"]', charge: '["amenity"="charging_station"]', health: '["amenity"="pharmacy"]'
-  };
-  var CATLBL = { fuel: 'qFuel', food: 'qFood', cafe: 'qBar', parking: 'qPark', charge: 'qCharge', health: 'qPharm' };
+  var CATQ = {}, CATLBL = {};
+  QCATS.forEach(function (q) { CATQ[q.id] = q.q; CATLBL[q.id] = q.lbl; });
   var catRes = null, catGen = 0;
   function llScr(lat, lon) {
     if (world.on || worldBlend() >= 1) { var w = wScr(lat, lon); return w.vis ? { x: w.x, y: w.y } : null; }
@@ -1518,10 +1535,38 @@
       done(items.length ? items : fromCells());
     }, function () { done(fromCells()); });
   }
-  Array.prototype.forEach.call(document.querySelectorAll('#quick .qb'), function (b) {
-    b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', function () { catSearch(b.dataset.cat); });
-  });
+  /* tasti rapidi sotto la barra di ricerca: li sceglie l'utente dal menù (massimo 5) */
+  function renderQuick() {
+    var box = $('quick'); box.innerHTML = '';
+    prefs.quick.forEach(function (id) {
+      var q = QCATS.filter(function (x) { return x.id === id; })[0]; if (!q) return;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'qb'; b.dataset.cat = id; b.style.color = POI_COL[id] || '#ccc';
+      b.setAttribute('aria-label', t(q.lbl)); b.title = t(q.lbl); b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#' + q.sym + '"/></svg>';
+      b.addEventListener('click', function () { catSearch(id); });
+      box.appendChild(b);
+    });
+    box.hidden = !prefs.quick.length;
+    setQuickUI();
+    var pk = $('quickPick'); if (!pk) return;
+    pk.innerHTML = '';
+    QCATS.forEach(function (q) {
+      var on = prefs.quick.indexOf(q.id) >= 0, b = document.createElement('button');
+      b.type = 'button'; b.className = 'qpick'; b.style.setProperty('--c', POI_COL[q.id] || '#ccc'); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#' + q.sym + '"/></svg><span></span>';
+      b.querySelector('span').textContent = t(q.lbl);
+      b.addEventListener('click', function () {
+        var i = prefs.quick.indexOf(q.id);
+        if (i >= 0) prefs.quick.splice(i, 1);
+        else if (prefs.quick.length >= 5) { toast(t('qMax')); return; }
+        else prefs.quick.push(q.id);
+        if (catRes && prefs.quick.indexOf(catRes.cat) < 0) clearCat();
+        savePrefs(); renderQuick();
+      });
+      pk.appendChild(b);
+    });
+    $('quickCount').textContent = prefs.quick.length + '/5';
+  }
   function drawCat() {
     if (!catRes || !catRes.items.length) return;
     var placed = [], i, k;
@@ -1591,6 +1636,82 @@
     reports = reports.filter(function (x) { return x !== repSel; }); saveReports(); closeRepInfo(); toast(t('repGoneMsg'));
     if (prefs.voice && state === 'nav') speak(t('repGoneMsg') + '.');
   });
+  /* Traffico in tempo reale: incidenti, code, lavori e chiusure da TomTom e/o HERE (con le chiavi gratuite dell'utente) */
+  var inc = { list: [] }, incT = 0, incBusy = false;
+  function incNorm(t0) { return t0 === 'crash' || t0 === 'traffic' ? t0 : 'obst'; }
+  var TT_INC = { 1: ['crash', 'incAcc'], 6: ['traffic', 'incJam'], 7: ['obst', 'incLane'], 8: ['obst', 'incClosed'], 9: ['obst', 'incWorks'], 14: ['obst', 'incBroken'] };
+  var HERE_INC = { accident: ['crash', 'incAcc'], congestion: ['traffic', 'incJam'], roadClosure: ['obst', 'incClosed'], construction: ['obst', 'incWorks'], laneRestriction: ['obst', 'incLane'], plannedEvent: ['obst', 'incWorks'] };
+  function midOf(g) {
+    if (!g || !g.coordinates) return null;
+    var c = g.coordinates; if (g.type === 'LineString') c = c[Math.floor(c.length / 2)];
+    return c && c.length >= 2 ? { lon: c[0], lat: c[1] } : null;
+  }
+  function incTomTom(bb) {
+    var t0 = Date.now(), f = '{incidents{type,geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay,events{description},from,to,delay}}}';
+    var url = 'https://api.tomtom.com/traffic/services/5/incidentDetails?key=' + encodeURIComponent(prefs.ttKey) + '&bbox=' + bb.w.toFixed(4) + ',' + bb.s.toFixed(4) + ',' + bb.e.toFixed(4) + ',' + bb.n.toFixed(4) + '&fields=' + encodeURIComponent(f) + '&language=' + (prefs.lang === 'it' ? 'it-IT' : 'en-GB') + '&timeValidityFilter=present';
+    return fetch(url).then(function (r) { if (!r.ok) { var e = new Error('http'); e.status = r.status; throw e; } return r.json(); }).then(function (j) {
+      logReq('api.tomtom.com', 'incidenti', Date.now() - t0, 'ok');
+      var out = [];
+      (j.incidents || []).forEach(function (x) {
+        var p = x.properties || {}, m = midOf(x.geometry), ty = TT_INC[p.iconCategory];
+        if (!m || !ty) return;
+        if (p.iconCategory === 6 && (p.magnitudeOfDelay || 0) < 2) return;      // code leggere: inutili
+        var ev = (p.events && p.events[0] && p.events[0].description) || '';
+        out.push({ lat: m.lat, lon: m.lon, t: ty[0], k: ty[1], txt: ev, road: [p.from, p.to].filter(Boolean).join(' → '), delay: p.delay || 0, src: 'TomTom' });
+      });
+      return out;
+    }, function (e) { logReq('api.tomtom.com', 'incidenti', Date.now() - t0, e && e.status ? 'errore ' + e.status : 'errore'); return []; });
+  }
+  function incHere(bb) {
+    var t0 = Date.now();
+    var url = 'https://data.traffic.hereapi.com/v7/incidents?in=bbox:' + bb.w.toFixed(4) + ',' + bb.s.toFixed(4) + ',' + bb.e.toFixed(4) + ',' + bb.n.toFixed(4) + '&locationReferencing=shape&lang=' + prefs.lang + '&apiKey=' + encodeURIComponent(prefs.hereKey);
+    return fetch(url).then(function (r) { if (!r.ok) { var e = new Error('http'); e.status = r.status; throw e; } return r.json(); }).then(function (j) {
+      logReq('data.traffic.hereapi.com', 'incidenti', Date.now() - t0, 'ok');
+      var out = [];
+      (j.results || []).forEach(function (x) {
+        var d = x.incidentDetails || {}, ty = HERE_INC[d.type] || (d.roadClosed ? HERE_INC.roadClosure : null), lk = x.location && x.location.shape && x.location.shape.links;
+        if (!ty || !lk || !lk.length) return;
+        var pts = lk[Math.floor(lk.length / 2)].points || []; if (!pts.length) return;
+        var pp = pts[Math.floor(pts.length / 2)];
+        if (d.type === 'congestion' && d.criticality && d.criticality !== 'critical' && d.criticality !== 'major') return;
+        out.push({ lat: pp.lat, lon: pp.lng, t: ty[0], k: ty[1], txt: (d.description && d.description.value) || '', road: (x.location.description && x.location.description.value) || '', delay: 0, src: 'HERE' });
+      });
+      return out;
+    }, function (e) { logReq('data.traffic.hereapi.com', 'incidenti', Date.now() - t0, e && e.status ? 'errore ' + e.status : 'errore'); return []; });
+  }
+  function fetchIncidents() {
+    if (incBusy || !ORG || !car.has || !prefs.liveInc || (!prefs.ttKey && !prefs.hereKey)) return;
+    var ll = view.free ? toLL(view.fx, view.fy) : toLL(car.x, car.y), dla = 0.14, dlo = 0.14 / Math.max(0.2, Math.cos(ll.lat * Math.PI / 180));
+    var bb = { s: ll.lat - dla, n: ll.lat + dla, w: ll.lon - dlo, e: ll.lon + dlo };
+    incBusy = true;
+    Promise.all([prefs.ttKey ? incTomTom(bb) : [], prefs.hereKey ? incHere(bb) : []]).then(function (r) {
+      var all = r[0].concat(r[1]), out = [];
+      all.forEach(function (a) {      // stesso evento da due fonti: se sono a meno di 120 m se ne tiene uno solo
+        for (var i = 0; i < out.length; i++) if (out[i].t === a.t && Math.abs(out[i].lat - a.lat) < 0.0011 && Math.abs(out[i].lon - a.lon) < 0.0016) { if (!out[i].txt && a.txt) out[i].txt = a.txt; return; }
+        out.push(a);
+      });
+      inc.list = out.slice(0, 80); incBusy = false;
+    });
+  }
+  function incText(x) { return t(x.k) + (x.road ? ' · ' + x.road : '') + (x.delay > 120 ? ' · +' + fmtDur(x.delay) : '') + (x.txt && x.txt !== t(x.k) ? ' — ' + x.txt : '') + ' (' + x.src + ')'; }
+  function hitInc(sx, sy) {
+    var best = null, bd = 26;
+    if (!prefs.liveInc) return null;
+    inc.list.forEach(function (x) { var sp = llScr(x.lat, x.lon); if (!sp) return; var d = Math.hypot(sp.x - sx, sp.y - sy); if (d < bd) { bd = d; best = x; } });
+    return best;
+  }
+  function drawInc() {
+    if (!prefs.liveInc || !inc.list.length) return;
+    for (var i = 0; i < inc.list.length; i++) {
+      var x = inc.list[i], sp = llScr(x.lat, x.lon); if (!sp || sp.x < 0 || sp.x > W || sp.y < 30 || sp.y > H) continue;
+      var d = REP[incNorm(x.t)];
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, 11, 0, 6.2832); ctx.fillStyle = 'rgba(10,6,24,0.92)'; ctx.fill();
+      ctx.setLineDash([4, 3]); ctx.lineWidth = 2.2; ctx.strokeStyle = d[0]; ctx.shadowColor = d[0]; ctx.shadowBlur = 8; ctx.stroke(); ctx.shadowBlur = 0; ctx.setLineDash([]);
+      ctx.fillStyle = d[0]; ctx.font = '800 12px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(d[1], sp.x, sp.y + 0.5);
+      ctx.restore();
+    }
+  }
   function hitRep(sx, sy) {
     var best = null, bd = 28;
     reports.forEach(function (r) { var sp = llScr(r.lat, r.lon); if (!sp) return; var d = Math.hypot(sp.x - sx, sp.y - sy); if (d < bd) { bd = d; best = r; } });
@@ -1834,7 +1955,7 @@
     if (voiceSel.value !== prefs.voiceName) voiceSel.value = prefs.voiceName;
   }
   function sanitize() {
-    if (['fast', 'short', 'simple'].indexOf(prefs.routeType) < 0) prefs.routeType = 'fast';
+    if (['fast', 'short'].indexOf(prefs.routeType) < 0) prefs.routeType = 'fast';
     if (!THEMES[prefs.theme]) prefs.theme = 'fuchsia';
     if (!SHAPES[prefs.carIcon]) prefs.carIcon = 'arrow';
     if (!VSTYLES[prefs.voiceStyle]) prefs.voiceStyle = 'natural';
@@ -1844,6 +1965,9 @@
     if (prefs.units !== 'km' && prefs.units !== 'mi') prefs.units = 'km';
     if (['it', 'en', 'es', 'fr', 'de'].indexOf(prefs.lang) < 0) prefs.lang = 'en';
     if (NRL.personas.indexOf(prefs.persona) < 0) prefs.persona = 'cyber';
+    if (!Array.isArray(prefs.quick)) prefs.quick = DEFAULTS.quick.slice();
+    prefs.quick = prefs.quick.filter(function (c, i, a) { return QCATS.some(function (q) { return q.id === c; }) && a.indexOf(c) === i; }).slice(0, 5);
+    prefs.hereKey = String(prefs.hereKey || '').replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 100);
     prefs.ttKey = String(prefs.ttKey || '').replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 80);
   }
   function applyPrefs() {
@@ -1851,7 +1975,7 @@
     TH = THEMES[prefs.theme] || THEMES.fuchsia; buildWalls();
     PITCH = prefs.tilt;
     syncUI(); if (typeof syncMode === 'function') syncMode();
-    $('ttKey').value = prefs.ttKey; langSel.value = prefs.lang; personaSel.value = prefs.persona;
+    $('ttKey').value = prefs.ttKey; $('hereKey').value = prefs.hereKey; langSel.value = prefs.lang; personaSel.value = prefs.persona;
   }
   function onPref(key) {
     savePrefs(); applyPrefs();
@@ -1895,7 +2019,8 @@
   function testPersona() {
     speak(pv('start', 1) + maneuverPhrase({ type: 'turn', mod: 'right', d: 300, name: '' }, 300), true);
   }
-  $('ttKey').addEventListener('change', function () { prefs.ttKey = $('ttKey').value.trim(); sanitize(); savePrefs(); $('ttKey').value = prefs.ttKey; });
+  $('ttKey').addEventListener('change', function () { prefs.ttKey = $('ttKey').value.trim(); sanitize(); savePrefs(); $('ttKey').value = prefs.ttKey; incT = 0; });
+  $('hereKey').addEventListener('change', function () { prefs.hereKey = $('hereKey').value.trim(); sanitize(); savePrefs(); $('hereKey').value = prefs.hereKey; incT = 0; });
 
   /* autovelox aggiunti da te (restano sul dispositivo) */
   var MYCAM_KEY = 'nightrider.app.mycams', myCams = [], myAdded = false;
@@ -1965,10 +2090,10 @@
   var view = { free: false, fx: 0, fy: 0, rot: 0, z3: 1, z2: 1, last: 0 };   // esplorazione con le dita
   var ZMIN3 = 0.4, ZMAX3 = 84, ZMIN2 = 0.12, ZMAX2 = 14;
   function is2D() { return !!prefs.view2d; }
-  function setZoom(z) {
+  function setZoom(z, ax, ay) {
     if (world.on) {
-      world.z = Math.min(WZMAX, Math.max(WZMIN, Math.log(WK / z) / Math.LN2));
-      if (world.z > exitZnow() && nearOrg()) exitWorld(false);
+      worldZoomTo(Math.log(WK / z) / Math.LN2, ax, ay);
+      if (world.z > exitZnow()) exitWorld(false);
       return;
     }
     if (is2D()) { if (z > ZMAX2 && ORG && car.has) { enterWorld(); return; } view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, z)); }
@@ -2417,7 +2542,7 @@
   }
 
   /* Punti di interesse: icone neon semplici disegnate a mano, con il nome quando c'è spazio */
-  var POI_COL = { fuel: '#ffb020', parking: '#5aa9ff', food: '#ff2e88', cafe: '#c07bff', shop: '#19e3ff', health: '#3ddc97', hotel: '#9aa4ff', money: '#f7e733', charge: '#3ddc97', sight: '#ff8fe9' };
+  var POI_COL = { fuel: '#ffb020', parking: '#5aa9ff', food: '#ff2e88', cafe: '#c07bff', shop: '#19e3ff', health: '#3ddc97', hotel: '#9aa4ff', mech: '#ff7a3d', biz: '#b9a8ff', money: '#f7e733', charge: '#3ddc97', sight: '#ff8fe9' };
   function poiIcon(cat, x, y, r) {
     var col = POI_COL[cat] || '#ccc';
     ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fillStyle = 'rgba(10,6,24,0.88)'; ctx.fill();
@@ -2432,13 +2557,14 @@
     else if (cat === 'shop') { ctx.rect(x - 4 * u, y - 2 * u, 8 * u, 7 * u); ctx.moveTo(x - 2 * u, y - 2 * u); ctx.quadraticCurveTo(x, y - 7 * u, x + 2 * u, y - 2 * u); }
     else if (cat === 'health') { ctx.moveTo(x, y - 5 * u); ctx.lineTo(x, y + 5 * u); ctx.moveTo(x - 5 * u, y); ctx.lineTo(x + 5 * u, y); }
     else if (cat === 'hotel') { ctx.moveTo(x - 5 * u, y + 4 * u); ctx.lineTo(x - 5 * u, y - 4 * u); ctx.moveTo(x - 5 * u, y + 1 * u); ctx.lineTo(x + 5 * u, y + 1 * u); ctx.lineTo(x + 5 * u, y + 4 * u); ctx.moveTo(x - 3 * u, y - 1 * u); ctx.lineTo(x - 0.5 * u, y - 1 * u); }
+    else if (cat === 'mech') { ctx.moveTo(x - 4.5 * u, y + 4.5 * u); ctx.lineTo(x + 1.5 * u, y - 1.5 * u); ctx.moveTo(x + 4 * u, y - 5 * u); ctx.arc(x + 2.6 * u, y - 3.6 * u, 2.6 * u, -0.6, 4.2); }
     else if (cat === 'money') { ctx.font = '800 ' + (r * 1.2) + 'px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('€', x, y + u * 0.5); return; }
     else if (cat === 'charge') { ctx.moveTo(x + 1.5 * u, y - 5.5 * u); ctx.lineTo(x - 3 * u, y + 0.5 * u); ctx.lineTo(x, y + 0.5 * u); ctx.lineTo(x - 1.5 * u, y + 5.5 * u); ctx.lineTo(x + 3 * u, y - 0.5 * u); ctx.lineTo(x, y - 0.5 * u); ctx.closePath(); }
     else { ctx.arc(x, y, 2.4 * u, 0, 6.2832); }
     ctx.stroke();
   }
   function drawPois() {
-    if (!prefs.pois || cm.Hc > 900) return;
+    if (!prefs.pois || cm.Hc > 1300) return;
     var list = [], c, k, R2 = cm.R + 30;
     for (c = 0; c < cellList.length; c++) {
       var ps = cellList[c].p;
@@ -2453,23 +2579,31 @@
         list.push({ q: q, x: sp.x, y: sp.y, D: cc.D });
       }
     }
-    list.sort(function (a, b) { return a.D - b.D; });
-    var placed = [], n = 0, i, showNames = cm.Hc < 520, r = cm.Hc < 300 ? 11 : 9;
+    list.sort(function (a, b) { return (a.q.nm ? 0 : 1) - (b.q.nm ? 0 : 1) || a.D - b.D; });
+    var rects = [], n = 0, i, k, showNames = cm.Hc < 900, r = cm.Hc < 300 ? 11 : 9;
+    function free(x0, y0, x1, y1) {
+      for (var m = 0; m < rects.length; m++) { var q = rects[m]; if (x0 < q[2] && x1 > q[0] && y0 < q[3] && y1 > q[1]) return false; }
+      return true;
+    }
     ctx.save();
-    ctx.font = '700 10.5px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    for (i = 0; i < list.length && n < 70; i++) {
-      var it = list[i], hit = false, rr = Math.max(6, Math.min(r, r * 150 / Math.max(60, it.D * 0.6)));
-      for (k = 0; k < placed.length; k++) if (Math.abs(placed[k].x - it.x) < rr + placed[k].r + 2 && Math.abs(placed[k].y - it.y) < rr + placed[k].r + 2) { hit = true; break; }
-      if (hit) continue;
-      placed.push({ x: it.x, y: it.y, r: rr }); n++;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (i = 0; i < list.length && n < 160; i++) {
+      var it = list[i], rr = Math.max(6, Math.min(r, r * 150 / Math.max(60, it.D * 0.6)));
+      if (!free(it.x - rr, it.y - rr, it.x + rr, it.y + rr)) continue;
+      var nm = it.q.nm ? (it.q.nm.length > 24 ? it.q.nm.slice(0, 23) + '…' : it.q.nm) : '', lab = null;
+      if (showNames && nm) {
+        ctx.font = '700 10.5px Nunito, sans-serif';
+        var tw = ctx.measureText(nm).width + 4;
+        if (free(it.x - tw / 2, it.y + rr + 1, it.x + tw / 2, it.y + rr + 14)) lab = [it.x - tw / 2, it.y + rr + 1, it.x + tw / 2, it.y + rr + 14];
+      }
+      if (!lab && it.q.c === 'biz') continue;     // le attività generiche senza spazio per il nome non servono
+      rects.push([it.x - rr, it.y - rr, it.x + rr, it.y + rr]); n++;
       poiIcon(it.q.c, it.x, it.y, rr);
-      ctx.font = '700 10.5px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      if (showNames && it.q.nm && n <= 28) {
-        var tw = ctx.measureText(it.q.nm).width + 4, clash = false;
-        for (k = 0; k < placed.length - 1; k++) if (Math.abs(placed[k].x - it.x) < tw / 2 + placed[k].r && Math.abs(placed[k].y - (it.y + rr + 7)) < 12) { clash = true; break; }
-        if (clash) continue;
-        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,4,22,0.92)'; ctx.strokeText(it.q.nm, it.x, it.y + rr + 2);
-        ctx.fillStyle = '#efeaff'; ctx.fillText(it.q.nm, it.x, it.y + rr + 2);
+      if (lab) {
+        rects.push(lab);
+        ctx.font = '700 10.5px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,4,22,0.92)'; ctx.strokeText(nm, it.x, it.y + rr + 2);
+        ctx.fillStyle = '#efeaff'; ctx.fillText(nm, it.x, it.y + rr + 2);
       }
     }
     ctx.restore();
@@ -2482,7 +2616,7 @@
     ctx.restore();
   }
   function drawPins() {
-    if (typeof drawCat === 'function') { drawCat(); drawReports(); }
+    if (typeof drawCat === 'function') { drawCat(); drawReports(); drawInc(); }
     var list = stops.map(function (q, i) { return { lat: q.lat, lon: q.lon, l: String(i + 1), c: C.yel }; });
     if (pin) list.push({ lat: pin.lat, lon: pin.lon, l: '', c: C.cyan });
     for (var i = 0; i < list.length; i++) {
@@ -2594,7 +2728,7 @@
 
 
   /* ---------- Mondo: mappa Mercator a tile (fino a z14+) e globo quando si esce dal pianeta ---------- */
-  var world = { on: false, mx: 0.5, my: 0.5, z: 12, zin: 14, ang0: 0, off0: 0, panned: false, wasFree: false };
+  var world = { on: false, mx: 0.5, my: 0.5, z: 12, zin: 14, ang0: 0, rot: 0, off0: 0, panned: false, wasFree: false };
   var WX = { mx: 0.5, my: 0.5, z: 12, sx: 0, sy: 0, ang: 0 };
   var WK = 1e6, WZMIN = 1.8, WZ_GLOBE = 3.3, WZMAX = 17.5, WS = 384;
   var W_LAND = '#150f2e', W_WATER = '#071433', W_SEA = '#050a1c';
@@ -2609,12 +2743,11 @@
   function lonOfMx(mx) { return mx * 360 - 180; }
   function latOfMy(my) { return Math.atan(Math.sinh(Math.PI * (1 - 2 * my))) * 180 / Math.PI; }
   function wzOfLocal(lat, z2) { return Math.log(156543.03 * Math.cos(lat * Math.PI / 180) / (HC * 6 * z2 / cm.F)) / Math.LN2; }
-  function nearOrg() { return Math.abs(latOfMy(world.my) - ORG.lat) < 0.9 && Math.abs(lonOfMx(world.mx) - ORG.lon) < 1.3; }
   function wrapAng(a) { return ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; }
   function wK() { var k = Math.max(0, Math.min(1, (world.z - (world.zin - 2.5)) / 2.5)); return k * k * (3 - 2 * k); }
   function wXfWorld() {
     var k = wK();
-    WX.mx = world.mx; WX.my = world.my; WX.z = world.z; WX.sx = cm.cx; WX.sy = cm.cy + world.off0 * k; WX.ang = world.ang0 * k;
+    WX.mx = world.mx; WX.my = world.my; WX.z = world.z; WX.sx = cm.cx; WX.sy = cm.cy + world.off0 * k; WX.ang = world.ang0 * k + world.rot;
   }
   /* trasformazione che coincide con la vista locale dall'alto: serve alla dissolvenza tra mappa locale e mappa del mondo */
   function wXfLocal() {
@@ -2625,7 +2758,7 @@
   function exitZnow() { return wzOfLocal(latOfMy(world.my), ZMAX2 * 0.8); }
   function enterWorld() {
     wXfLocal();
-    world.mx = WX.mx; world.my = WX.my; world.z = WX.z; world.zin = WX.z; world.ang0 = wrapAng(WX.ang); world.off0 = H * 0.68 - cm.cy;
+    world.mx = WX.mx; world.my = WX.my; world.z = WX.z; world.zin = WX.z; world.ang0 = wrapAng(WX.ang); world.rot = 0; world.off0 = H * 0.68 - cm.cy;
     world.panned = false; world.wasFree = view.free; world.on = true; rcBtn.hidden = false;
   }
   /* mostra un'area (per esempio un percorso lungo) direttamente sulla mappa del mondo */
@@ -2633,25 +2766,75 @@
     var sx = Math.max(1e-6, Math.abs(mxOf(lon2) - mxOf(lon1))), sy = Math.max(1e-6, Math.abs(myOf(lat2) - myOf(lat1)));
     var z = Math.log(Math.min((W - side) * 0.78 / (256 * sx), H * 0.5 / (256 * sy))) / Math.LN2;
     world.mx = (mxOf(lon1) + mxOf(lon2)) / 2; world.my = (myOf(lat1) + myOf(lat2)) / 2;
-    world.z = Math.max(WZMIN, Math.min(WZMAX, z)); world.zin = world.z; world.ang0 = 0; world.off0 = 0;
+    world.z = Math.max(WZMIN, Math.min(WZMAX, z)); world.zin = world.z; world.ang0 = 0; world.rot = 0; world.off0 = 0;
     world.panned = true; world.wasFree = true; world.on = true; rcBtn.hidden = false;
   }
+  function wAng() { return world.ang0 * wK() + world.rot; }
+  /* il punto della mappa del mondo che si trova sotto un punto dello schermo (null sul globo fuori dal disco) */
+  function worldUnder(sx, sy) {
+    if (world.z < WZ_GLOBE) {
+      var R = 256 * Math.pow(2, world.z) / (2 * Math.PI), a = -wAng(), c = Math.cos(a), sn = Math.sin(a), ex0 = sx - cm.cx, ey0 = sy - H * 0.5;
+      var x = (ex0 * c - ey0 * sn) / R, y = -(ex0 * sn + ey0 * c) / R, rho = Math.sqrt(x * x + y * y);
+      if (rho >= 1) return null;
+      var p0 = latOfMy(world.my) * Math.PI / 180, l0 = lonOfMx(world.mx) * Math.PI / 180, cc = Math.asin(rho), lat, lon;
+      if (rho < 1e-9) { lat = p0; lon = l0; }
+      else { lat = Math.asin(Math.cos(cc) * Math.sin(p0) + y * Math.sin(cc) * Math.cos(p0) / rho); lon = l0 + Math.atan2(x * Math.sin(cc), rho * Math.cos(p0) * Math.cos(cc) - y * Math.sin(p0) * Math.sin(cc)); }
+      return { mx: mxOf(lon * 180 / Math.PI), my: myOf(lat * 180 / Math.PI), globe: true };
+    }
+    wXfWorld();
+    var wp = 256 * Math.pow(2, WX.z), ex = sx - WX.sx, ey = sy - WX.sy, ca = Math.cos(WX.ang), sa = Math.sin(WX.ang);
+    return { mx: WX.mx + (ex * ca + ey * sa) / wp, my: WX.my + (-ex * sa + ey * ca) / wp };
+  }
+  /* zoom sulla mappa del mondo che resta ancorato al punto toccato (ax, ay) */
+  function worldZoomTo(nz, ax, ay) {
+    var oz = world.z, pre = ax == null ? null : worldUnder(ax, ay);
+    nz = Math.min(WZMAX, Math.max(WZMIN, nz));
+    world.z = nz;
+    if (!pre) return;
+    world.panned = true;
+    if (oz >= WZ_GLOBE && nz >= WZ_GLOBE) {
+      var cur = worldUnder(ax, ay);
+      world.mx = ((world.mx + pre.mx - cur.mx) % 1 + 1) % 1;
+      world.my = Math.max(0.01, Math.min(0.99, world.my + pre.my - cur.my));
+    } else if (nz > oz) {
+      var f = 1 - Math.pow(2, -(nz - oz)), dmx = pre.mx - world.mx;
+      dmx -= Math.round(dmx);
+      world.mx = ((world.mx + dmx * f) % 1 + 1) % 1;
+      world.my = Math.max(0.01, Math.min(0.99, world.my + (pre.my - world.my) * f));
+    }
+  }
+  /* lontano dal punto d'origine la proiezione locale si deforma: si sposta l'origine sulla zona che si sta guardando */
+  function rebaseNear(lat, lon) {
+    if (!ORG || route || alts.list.length || Math.abs(lat - ORG.lat) < 1.2 && Math.abs(lon - ORG.lon) < 1.8) return;
+    var cl = toLL(car.x, car.y), tl = toLL(tgt.x, tgt.y), fl = lastFix ? toLL(lastFix.x, lastFix.y) : null;
+    setOrigin(lat, lon);
+    var a = toXY(cl.lat, cl.lon); car.x = a.x; car.y = a.y;
+    a = toXY(tl.lat, tl.lon); tgt.x = a.x; tgt.y = a.y;
+    if (fl) { a = toXY(fl.lat, fl.lon); lastFix.x = a.x; lastFix.y = a.y; }
+    resetData();
+  }
   function exitWorld(follow) {
-    var k = wK(), lat = latOfMy(world.my), lon = lonOfMx(world.mx);
+    var k = wK(), wasPanned = world.panned || world.wasFree;
+    wXfWorld();
+    var wp = 256 * Math.pow(2, WX.z), ex = cm.cx - WX.sx, ey = H * 0.68 - WX.sy, ca = Math.cos(WX.ang), sa = Math.sin(WX.ang);
+    var fm = WX.mx + (ex * ca + ey * sa) / wp, fy2 = Math.max(0.001, Math.min(0.999, WX.my + (-ex * sa + ey * ca) / wp));
+    var lat = latOfMy(fy2), lon = lonOfMx(fm);
     world.on = false;
-    var hc = cm.F * 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, world.z), th = -(world.ang0 * k) - Math.PI / 2;
-    if (follow || (!world.panned && !world.wasFree)) { view.free = false; rcBtn.hidden = true; }
+    var hc = cm.F * 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, world.z), th = -(world.ang0 * k + world.rot) - Math.PI / 2;
+    if (follow || !wasPanned) { view.free = false; rcBtn.hidden = true; }
     else {
+      rebaseNear(lat, lon);
       var p = toXY(lat, lon);
       view.free = true; view.fx = p.x; view.fy = p.y; view.rot = th; rcBtn.hidden = false;
     }
-    if (is2D()) view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, hc / (HC * 6) * (follow ? 0 + 1 : 1)));
+    world.rot = 0;
+    if (is2D()) view.z2 = Math.min(ZMAX2, Math.max(ZMIN2, hc / (HC * 6)));
     else view.z3 = Math.min(ZMAX3, Math.max(ZMIN3, hc / HC));
     if (follow) { if (is2D()) view.z2 = ZMAX2 * 0.8; else view.z3 = ZMAX3 * 0.8; }
     ensureData();
   }
   function worldPan(dx, dy) {
-    var s = 256 * Math.pow(2, world.z), k = wK(), a = world.ang0 * k, c = Math.cos(a), sn = Math.sin(a);
+    var s = 256 * Math.pow(2, world.z), a = wAng(), c = Math.cos(a), sn = Math.sin(a);
     var u = dx * c + dy * sn, v = -dx * sn + dy * c;     // dal movimento sullo schermo al movimento sulla mappa ruotata
     world.mx = ((world.mx - u / s) % 1 + 1) % 1;
     world.my = Math.max(0.01, Math.min(0.99, world.my - v / s));
@@ -2796,7 +2979,8 @@
     if (world.on && world.z < WZ_GLOBE) {
       var R = 256 * Math.pow(2, world.z) / (2 * Math.PI), p0 = latOfMy(world.my) * Math.PI / 180, l0 = lonOfMx(world.mx) * Math.PI / 180;
       var p = lat * Math.PI / 180, dl = lon * Math.PI / 180 - l0, cc = Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(dl);
-      return { x: cm.cx + R * Math.cos(p) * Math.sin(dl), y: H * 0.5 - R * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(dl)), vis: cc > 0 };
+      var gx = R * Math.cos(p) * Math.sin(dl), gy = -R * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(dl)), ga = wAng(), gc = Math.cos(ga), gs = Math.sin(ga);
+      return { x: cm.cx + gx * gc - gy * gs, y: H * 0.5 + gx * gs + gy * gc, vis: cc > 0 };
     }
     var wp = 256 * Math.pow(2, WX.z), dx = mxOf(lon) - WX.mx, ca = Math.cos(WX.ang), sa = Math.sin(WX.ang);
     dx -= Math.round(dx);
@@ -2895,6 +3079,7 @@
     var R = 256 * Math.pow(2, world.z) / (2 * Math.PI), cx = cm.cx, cy = H * 0.5, i, j;
     ctx.save(); ctx.globalAlpha = alpha;
     ctx.fillStyle = '#04050f'; ctx.fillRect(0, 0, W, H);
+    ctx.translate(cx, cy); ctx.rotate(wAng()); ctx.translate(-cx, -cy);
     if (!stars) { stars = []; var s = 7; for (i = 0; i < 140; i++) { s = (s * 16807) % 2147483647; var a = s / 2147483647; s = (s * 16807) % 2147483647; stars.push([a, s / 2147483647, 0.4 + (i % 5) * 0.18]); } }
     for (i = 0; i < stars.length; i++) { ctx.fillStyle = 'rgba(190,200,255,' + (0.25 + stars[i][2] * 0.4) + ')'; ctx.fillRect(stars[i][0] * W, stars[i][1] * H, stars[i][2] * 1.6, stars[i][2] * 1.6); }
     var gl = ctx.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.22);
@@ -2994,6 +3179,29 @@
     rcBtn.hidden = false;
   }
   var ztw = false;      // ritorno morbido alla scala di navigazione
+  var compassTw = false, cmpBtn = $('compassBtn'), cmpIc = $('compassIc');
+  function northAng() { return world.on ? wAng() : -(Math.atan2(cm.fy, cm.fx) + Math.PI / 2); }
+  cmpBtn.addEventListener('click', function () {
+    if (!world.on && !view.free) enterFree();
+    compassTw = true; touch();
+  });
+  function stepCompass(dt) {
+    var kk = 1 - Math.exp(-dt * 7), d;
+    if (world.on) {
+      var tot = wrapAng(world.ang0 * wK() + world.rot);
+      world.rot = wrapAng(world.rot - tot * kk); world.ang0 *= (1 - kk);
+      if (Math.abs(wAng()) < 0.004) { world.rot = 0; world.ang0 = 0; compassTw = false; }
+    } else {
+      d = wrapAng(-Math.PI / 2 - view.rot); view.rot = view.rot + d * kk;
+      if (Math.abs(d) < 0.004) { view.rot = -Math.PI / 2; compassTw = false; }
+    }
+    touch();
+  }
+  function syncCompass() {
+    var show = world.on || view.free;
+    if (cmpBtn.hidden === show) cmpBtn.hidden = !show;
+    if (show) cmpIc.style.transform = 'rotate(' + northAng() + 'rad)';
+  }
   function recenter() {
     if (world.on) { exitWorld(true); ztw = true; touch(); return; }
     var wasFar = worldBlend() > 0.02;
@@ -3055,9 +3263,14 @@
         if (!gest.on) { if (Math.hypot(pw.x - gest.x0, pw.y - gest.y0) < 7) return; gest.on = true; gest.px = gest.x0; gest.py = gest.y0; }
         worldPan(pw.x - gest.px, pw.y - gest.py); gest.px = pw.x; gest.py = pw.y;
       } else if (gest.t === 'pinch' && ids.length >= 2) {
-        var qa = ptrs[ids[0]], qb = ptrs[ids[1]], qd = Math.hypot(qa.x - qb.x, qa.y - qb.y) || 1;
-        setZoom(gest.z0 * gest.d0 / qd);
-        if (!world.on) { gest.w = false; gest.z0 = curZoom(); gest.d0 = qd; }
+        var qa = ptrs[ids[0]], qb = ptrs[ids[1]], qd = Math.hypot(qa.x - qb.x, qa.y - qb.y) || 1, qm = { x: (qa.x + qb.x) / 2, y: (qa.y + qb.y) / 2 };
+        var qang = Math.atan2(qb.y - qa.y, qb.x - qa.x);
+        if (gest.wr0 == null) gest.wr0 = world.rot;
+        compassTw = false;
+        if (Math.abs(qang - gest.a0) > 0.05 || gest.rotOn) { gest.rotOn = true; world.rot = wrapAng(gest.wr0 + (qang - gest.a0)); world.panned = true; }
+        setZoom(gest.z0 * gest.d0 / qd, qm.x, qm.y);
+        if (!world.on) { gest.w = false; gest.z0 = curZoom(); gest.d0 = qd; gest.g0 = null; }
+        else { gest.z0 = curZoom(); gest.d0 = qd; }
       }
       return;
     }
@@ -3093,6 +3306,10 @@
       var tp3 = ptrs[e.pointerId], hr = hitRep(tp3.x, tp3.y);
       if (hr) openRepInfo(hr);
     }
+    if (e.type === 'pointerup' && inc.list.length && !lpFired && gest && gest.t === 'pan' && !gest.on && Object.keys(ptrs).length === 1) {
+      var tp4 = ptrs[e.pointerId], hi = hitInc(tp4.x, tp4.y);
+      if (hi) toast(incText(hi), 9000);
+    }
     if (e.type === 'pointerup' && catRes && !lpFired && gest && gest.t === 'pan' && !gest.on && Object.keys(ptrs).length === 1) {
       var tp2 = ptrs[e.pointerId], hc2 = hitCat(tp2.x, tp2.y);
       if (hc2) openPin({ lat: hc2.lat, lon: hc2.lon, name: hc2.name || t(CATLBL[catRes.cat]), sub: t(CATLBL[catRes.cat]) });
@@ -3109,7 +3326,7 @@
     if (!ORG || !car.has) return;
     e.preventDefault(); touch(); ztw = false;
     var f = Math.exp(e.deltaY * 0.0015);
-    if (world.on) { setZoom(curZoom() * f); return; }
+    if (world.on) { var wq = pos(e); setZoom(curZoom() * f, wq.x, wq.y); return; }
     if (view.free) {
       var p = pos(e), g0 = groundAt(p.x, p.y);
       setZoom(curZoom() * f); setupCamera();
@@ -3127,6 +3344,9 @@
   var last = performance.now(), hudT = 0, dataT = 0, limT = 0;
   function frame(now) {
     var dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (compassTw) stepCompass(dt);
+    if (now - incT > 120000 && car.has && !document.hidden) { incT = now; fetchIncidents(); }
+    syncCompass();
     if (ztw && !world.on) {
       var cz = is2D() ? view.z2 : view.z3, nz = cz * Math.pow(1 / cz, 1 - Math.exp(-dt * 2.4));
       if (Math.abs(Math.log(nz)) < 0.03) { nz = 1; ztw = false; }
@@ -3182,7 +3402,12 @@
   }
   window.__nightrider = {
     llScr: function (a, b) { return llScr(a, b); },
-    wb: function () { return { on: world.on, z: world.z, blend: worldBlend(), z2: view.z2, z3: view.z3, free: view.free, near: world.on ? nearOrg() : null, ex: world.on ? exitZnow() : null }; },
+    org: function () { return ORG && { lat: ORG.lat, lon: ORG.lon }; },
+    wrot: function (v) { if (v !== undefined) world.rot = v; return { rot: world.rot, ang0: world.ang0, ang: world.on ? wAng() : null, free: view.free }; },
+    under: function (x, y) { var u = world.on ? worldUnder(x, y) : null; return u && { lat: latOfMy(u.my), lon: lonOfMx(u.mx) }; },
+    quick: function () { return prefs.quick.slice(); },
+    valid: function (rs) { return validAlts(distinctRoutes(rs)).map(function (r) { return r.duration; }); },
+    wb: function () { return { on: world.on, z: world.z, blend: worldBlend(), z2: view.z2, z3: view.z3, free: view.free, ex: world.on ? exitZnow() : null }; },
     refDbg: function () { return refDbg; },
     refs: function () { var a = []; cellList.forEach(function (c) { (c.l || []).forEach(function (l) { if (l.ref) a.push(l.ref + ':' + l.k + ':' + (l.rps || []).length); }); }); return a.slice(0, 12); },
     rings: function () { var n = 0, tot = 0, ks = []; cellList.forEach(function (c) { c.r.forEach(function (r) { tot++; if (r.ring) { n++; ks.push(r.k + '/' + r.w.toFixed(1)); } }); }); return { rings: n, roads: tot, ks: ks }; },

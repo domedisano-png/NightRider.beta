@@ -89,3 +89,10 @@ Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `
 - Percorso: opzioni "Evita i traghetti" e "Evita strade non asfaltate" (controllo non asfaltato tramite Overpass, indicativo).
 - Numeri di autostrade e strade principali (A14, SS16…) come cartelli neon; interruttore "Numeri delle strade" in Mappa.
 - Dal pulsante "La mia posizione" in mappa del mondo/globo la vista torna morbidamente alla scala di navigazione.
+
+## Giro 10 (v12)
+- **Mappa del mondo**: si ruota con due dita come la mappa di guida; il pulsante bussola (compare quando esplori) riporta il nord in alto. Lo zoom resta ancorato al punto toccato/pizzicato e, quando si passa alla mappa locale, continua da lì. Lo switch funziona in qualsiasi punto del pianeta (l'origine locale viene spostata quando serve e non c'è un percorso attivo).
+- **Percorsi**: tolto "meno svolte". Le alternative compaiono solo se sono davvero diverse (<80% di tratto in comune) e hanno un motivo: più corte, meno traffico, senza autostrada o quasi pari tempo; mai oltre +30% (max 45 min).
+- **Attività**: nomi di tutte le attività con collisioni gestite; categoria generica per quelle senza icona dedicata.
+- **Tasti rapidi**: Menu → Tasti rapidi, fino a 5 su 11 categorie (nuove: alberghi, officine, negozi, banche, da vedere).
+- **Traffico live**: incidenti, code, lavori e chiusure da TomTom (stessa chiave dei percorsi) e/o HERE (chiave gratuita), uniti senza doppioni, aggiornati ogni 2 minuti; tocca l'icona per i dettagli. Velox OSM: letti anche i tag `enforcement=speed`.

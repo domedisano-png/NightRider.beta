@@ -26,6 +26,11 @@
   <symbol id="q-park" viewBox="0 0 24 24"><path d="M9 20V5h5a4 4 0 0 1 0 8H9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="q-charge" viewBox="0 0 24 24"><path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="q-health" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></symbol>
+  <symbol id="q-hotel" viewBox="0 0 24 24"><path d="M3 19V6M3 14h18v5M21 14v-2a3 3 0 0 0-3-3h-7v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7" cy="11" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="q-mech" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 4.9 4.9L20 12l-8 8a2.1 2.1 0 0 1-3-3l8-8-.4-.6A4 4 0 0 0 14.5 6.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="q-shop" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="q-money" viewBox="0 0 24 24"><path d="M17 7a5 5 0 1 0 0 10M6 10h8M6 14h8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="q-sight" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.7 6.6 19.7l1.1-6.1L3.2 9.4l6.1-.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="r-traffic" viewBox="0 0 24 24"><path d="M3 16l4-8h10l4 8M3 16h18M7 19v-3M17 19v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="r-crash" viewBox="0 0 24 24"><path d="M12 3l9 16H3z M12 9v5M12 16.5v.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="r-obst" viewBox="0 0 24 24"><path d="M3 20h18M6 20l2-10h8l2 10M9 14h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -58,12 +63,6 @@
         <input id="q" type="search" data-i18n-ph="phQ" placeholder="Dove vuoi andare?" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false">
       </form>
       <div class="quick" id="quick" role="group" aria-label="Attività vicine">
-        <button type="button" class="qb" data-cat="fuel" data-i18n-aria="qFuel" aria-label="Distributore"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-fuel"/></svg></button>
-        <button type="button" class="qb" data-cat="food" data-i18n-aria="qFood" aria-label="Ristoranti"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-food"/></svg></button>
-        <button type="button" class="qb" data-cat="cafe" data-i18n-aria="qBar" aria-label="Bar"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-cafe"/></svg></button>
-        <button type="button" class="qb" data-cat="parking" data-i18n-aria="qPark" aria-label="Parcheggi"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-park"/></svg></button>
-        <button type="button" class="qb" data-cat="charge" data-i18n-aria="qCharge" aria-label="Ricarica"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-charge"/></svg></button>
-        <button type="button" class="qb" data-cat="health" data-i18n-aria="qPharm" aria-label="Farmacie"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#q-health"/></svg></button>
       </div>
       <ul class="results" id="results" aria-live="polite"></ul>
       <p class="note" id="gpsLine" data-i18n="gpsWait">In attesa del GPS…</p>
@@ -91,6 +90,7 @@
     <button type="button" class="round" id="zoomOut" data-i18n-aria="zOut" aria-label="Allontana la mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
     <button type="button" class="round txt" id="modeBtn" aria-label="2D / 3D">3D</button>
     <button type="button" class="round" id="reportBtn" data-i18n-aria="rep" aria-label="Segnala" style="color:#ffb020"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#r-flag"/></svg></button>
+    <button type="button" class="round" id="compassBtn" data-i18n-aria="compass" aria-label="Orienta a nord" hidden><svg id="compassIc" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 17 13H7z" fill="#ff2e88"/><path d="M12 22 7 11h10z" fill="currentColor" opacity=".55"/><circle cx="12" cy="12" r="1.6" fill="#0a0716"/></svg></button>
     <button type="button" class="round" id="recenterBtn" data-i18n-aria="recenter" aria-label="Torna alla mia posizione" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
   </div>
   <div class="bottom">
@@ -167,7 +167,6 @@
       <div class="seg" role="radiogroup" aria-labelledby="fl-route">
         <button type="button" role="radio" data-key="routeType" data-val="fast" data-i18n="fast">Più veloce</button>
         <button type="button" role="radio" data-key="routeType" data-val="short" data-i18n="short">Più breve</button>
-        <button type="button" role="radio" data-key="routeType" data-val="simple" data-i18n="simple">Meno svolte</button>
       </div>
       <div style="margin-top:10px">
         <button type="button" class="sw" role="switch" data-key="avoidHighway"><span data-i18n="avoidHw">Evita le autostrade</span><span class="track"><i></i></span></button>
@@ -198,6 +197,13 @@
       <div class="fl"><label for="tilt" data-i18n="tiltLbl">Inclinazione della vista</label><output id="tiltOut">34°</output></div>
       <input type="range" id="tilt" data-key="tilt" min="0.35" max="1.25" step="0.05">
       </details>
+      </div>
+    </details>
+    <details class="sec acc">
+      <summary><span><span data-i18n="sQuick">Tasti rapidi</span><small id="quickCount" class="cnt"></small></span></summary>
+      <div class="accb">
+        <p class="note" data-i18n="quickHelp">Scegli fino a 5 categorie da mostrare sotto la barra di ricerca.</p>
+        <div class="qpicks" id="quickPick"></div>
       </div>
     </details>
     <details class="sec acc">
@@ -273,6 +279,10 @@
       <div class="fl"><label for="ttKey" data-i18n="ttLbl">Chiave TomTom (facoltativa)</label></div>
       <input type="text" id="ttKey" class="txt" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-i18n-ph="ttPh" placeholder="">
       <p class="note"><span data-i18n="ttNote"></span> <a href="https://developer.tomtom.com/" target="_blank" rel="noopener" data-i18n="ttLink">Ottieni una chiave gratuita</a></p>
+      <button type="button" class="sw" role="switch" data-key="liveInc"><span data-i18n="liveInc">Incidenti e code in tempo reale</span><span class="track"><i></i></span></button>
+      <div class="fl"><label for="hereKey" data-i18n="hereLbl">Chiave HERE (facoltativa)</label></div>
+      <input type="text" id="hereKey" class="txt" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="">
+      <p class="note"><span data-i18n="hereNote"></span> <a href="https://platform.here.com/" target="_blank" rel="noopener" data-i18n="ttLink">Ottieni una chiave gratuita</a></p>
       <div class="btnrow">
         <button type="button" class="btn" id="reportCam" data-i18n="reportCam">Aggiungi un autovelox qui</button>
         <button type="button" class="btn" id="reportClear" data-i18n="reportClear">Cancella i miei autovelox</button>

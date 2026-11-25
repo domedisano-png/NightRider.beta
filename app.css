@@ -431,3 +431,13 @@ select { width: 100%; }
 
 /* niente scritte GPS / Mappa */
 .stats .eta { display: none !important; }
+
+/* round 10: tasti rapidi scelti dall'utente, bussola */
+.qpicks { display: grid; grid-template-columns: repeat(auto-fill, minmax(122px, 1fr)); gap: 8px; }
+.qpick { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--panel-2); color: var(--c, var(--fg)); font: 700 13px Nunito, sans-serif; cursor: pointer; text-align: left; }
+.qpick span { color: var(--fg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qpick svg { width: 20px; height: 20px; flex: none; }
+.qpick[aria-pressed="true"] { border-color: var(--c); box-shadow: 0 0 10px -2px var(--c); background: color-mix(in srgb, var(--c) 16%, var(--panel-2)); }
+.cnt { opacity: .7; font-weight: 700; margin-left: 6px; }
+#compassIc { width: 24px; height: 24px; transition: none; }
+.quick[hidden] { display: none; }
