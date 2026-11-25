@@ -79,3 +79,6 @@ Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `
 - Linee più dritte: semplificazione più forte sui rettilinei, curve solo dove servono.
 - Nuove icone auto (vista dall'alto con parabrezza, specchietti, fari) e moto (con pilota e manubrio).
 - Segnalazioni selezionabili: tocca l'icona sulla mappa per "Ancora presente" o "Risolto"; in guida l'app avvisa a ~450 m e chiede conferma a ~70 m. Restano sul dispositivo (non condivise con altri utenti).
+
+## Aggiornamento (strade 3D)
+- Strade disegnate con larghezza continua in prospettiva (niente "collo di bottiglia" ai vertici), giunzioni arrotondate, bordo neon piu spesso.

@@ -2163,54 +2163,67 @@
       }
     }
     var colors = [ROAD_MINOR, ROAD_MAJOR, ROAD_MAJOR, ROAD_MAJOR, ROAD_MOTORWAY, ROAD_MOTORWAY];
-    // raccoglie i segmenti in schermo, raggruppati per larghezza (in pixel) per fare pochi tratti
-    function roadBuckets(list, mul) {
-      var bk = {}, kk, ii;
+    // proietta ogni strada in schermo con la larghezza esatta in ogni punto (prospettiva continua: niente scalini né "colli di bottiglia")
+    function roadGeom(list) {
+      var out = [], kk, ii;
       for (kk = 0; kk < list.length; kk++) {
-        var r = list[kk], pa = null;
+        var r = list[kk], cur = null, pa = null;
         for (ii = 0; ii < r.xs.length; ii++) {
           var cc = cam3(r.xs[ii], r.ys[ii], 0);
-          if (ii && !(cc.D < NEAR && pa.D < NEAR) && (Math.abs(r.xs[ii] - fc.x) <= V2 || Math.abs(r.ys[ii] - fc.y) <= V2)) {
-            var q0 = pa, q1 = cc;
-            if (q0.D < NEAR || q1.D < NEAR) {
-              var tt = (NEAR - q0.D) / (q1.D - q0.D);
-              var mid = { X: q0.X + (q1.X - q0.X) * tt, D: NEAR, U: q0.U + (q1.U - q0.U) * tt };
-              if (q0.D < NEAR) q0 = mid; else q1 = mid;
-            }
-            var s0 = scr(q0), s1 = scr(q1), wpx = r.w * wk * mul * cm.F / ((q0.D + q1.D) / 2);
-            var key = Math.max(1, Math.round(wpx * 2)) / 2;
-            (bk[key] || (bk[key] = [])).push(s0.x, s0.y, s1.x, s1.y);
+          if (ii) {
+            var q0 = pa, q1 = cc, ok = !(q0.D < NEAR && q1.D < NEAR);
+            if (ok && (Math.abs(r.xs[ii] - fc.x) > V2 && Math.abs(r.ys[ii] - fc.y) > V2) && (Math.abs(r.xs[ii - 1] - fc.x) > V2 && Math.abs(r.ys[ii - 1] - fc.y) > V2)) ok = false;
+            if (ok) {
+              if (q0.D < NEAR || q1.D < NEAR) {
+                var tt = (NEAR - q0.D) / (q1.D - q0.D);
+                var mid = { X: q0.X + (q1.X - q0.X) * tt, D: NEAR, U: q0.U + (q1.U - q0.U) * tt };
+                if (q0.D < NEAR) q0 = mid; else q1 = mid;
+              }
+              var s0 = scr(q0), s1 = scr(q1), k0 = r.w * wk * cm.F / q0.D, k1 = r.w * wk * cm.F / q1.D;
+              if (!cur || cur.cont !== ii - 1 || q0 !== pa) { cur = { x: [s0.x], y: [s0.y], w: [k0], cont: 0 }; out.push(cur); }
+              cur.x.push(s1.x); cur.y.push(s1.y); cur.w.push(k1); cur.cont = ii;
+            } else cur = null;
           }
           pa = cc;
         }
       }
-      return bk;
+      return out;
     }
-    function strokeBuckets(bk, extra, color, alpha) {
-      ctx.strokeStyle = color; ctx.globalAlpha = alpha;
-      for (var key in bk) {
-        var a2 = bk[key], w2 = +key + extra;
-        ctx.lineWidth = w2; ctx.beginPath();
-        for (var m = 0; m < a2.length; m += 4) { ctx.moveTo(a2[m], a2[m + 1]); ctx.lineTo(a2[m + 2], a2[m + 3]); }
-        ctx.stroke();
+    var TAU = 6.283185307;
+    function fillGeom(geo, sc, extra, color, alpha) {
+      ctx.beginPath();
+      for (var gi = 0; gi < geo.length; gi++) {
+        var g = geo[gi], n = g.x.length, i2;
+        for (i2 = 0; i2 < n; i2++) {
+          var rr = Math.max(0.5, (g.w[i2] * sc + extra) / 2);
+          ctx.moveTo(g.x[i2] + rr, g.y[i2]); ctx.arc(g.x[i2], g.y[i2], rr, 0, TAU, true);
+        }
+        for (i2 = 0; i2 < n - 1; i2++) {
+          var dx = g.x[i2 + 1] - g.x[i2], dy = g.y[i2 + 1] - g.y[i2], l = Math.sqrt(dx * dx + dy * dy);
+          if (l < 0.05) continue;
+          var nx = -dy / l, ny = dx / l, r0 = Math.max(0.5, (g.w[i2] * sc + extra) / 2), r1 = Math.max(0.5, (g.w[i2 + 1] * sc + extra) / 2);
+          ctx.moveTo(g.x[i2] + nx * r0, g.y[i2] + ny * r0); ctx.lineTo(g.x[i2 + 1] + nx * r1, g.y[i2 + 1] + ny * r1);
+          ctx.lineTo(g.x[i2 + 1] - nx * r1, g.y[i2 + 1] - ny * r1); ctx.lineTo(g.x[i2] - nx * r0, g.y[i2] - ny * r0); ctx.closePath();
+        }
       }
+      ctx.fillStyle = color; ctx.globalAlpha = alpha; ctx.fill();
     }
-    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.save();
     // ordine: stradine, provinciali, rampe e svincoli, poi le strade principali: chi si immette cede il colore alla strada in cui entra
     var seq = [[vis, 0], [vis, 1], [vis, 2], [visL, 1], [visL, 2], [visL, 3], [visL, 4], [visL, 5], [vis, 3], [vis, 4], [vis, 5]];
     for (var qi = 0; qi < seq.length; qi++) {
       var kd = seq[qi][1], lst = seq[qi][0][kd];
       if (!lst.length) continue;
       if (kd === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
-      var bk0 = roadBuckets(lst, 1);
+      var geo = roadGeom(lst);
       if (kd > 0) {
-        var ew = kd >= 3 ? 3.2 : 2.2;              // spessore del bordo in pixel (somma dei due lati)
-        if (kd >= 2) strokeBuckets(bk0, ew + (kd >= 3 ? 9 : 6), EDGE[kd], kd >= 3 ? 0.16 : 0.11);   // luce intorno
-        strokeBuckets(bk0, ew + 1.5, EDGE[kd], kd >= 3 ? 0.35 : 0.3);                            // sfumatura del neon
-        strokeBuckets(bk0, ew, EDGE[kd], 1);                                                      // bordo netto
+        var ew = kd >= 3 ? 5 : 3.4;                // spessore del bordo in pixel (somma dei due lati)
+        if (kd >= 2) fillGeom(geo, 1, ew + (kd >= 3 ? 11 : 7), EDGE[kd], kd >= 3 ? 0.15 : 0.1);   // luce intorno
+        fillGeom(geo, 1, ew + 2, EDGE[kd], kd >= 3 ? 0.35 : 0.3);                                  // sfumatura del neon
+        fillGeom(geo, 1, ew, EDGE[kd], 1);                                                          // bordo netto
       }
-      strokeBuckets(bk0, 0, colors[kd], 1);
-      if (kd >= 3) strokeBuckets(roadBuckets(lst, 0.12), 0, C.yel, 0.3);
+      fillGeom(geo, 1, 0, colors[kd], 1);
+      if (kd >= 3) fillGeom(geo, 0.12, 0, C.yel, 0.3);
     }
     ctx.restore(); ctx.globalAlpha = 1;
 
