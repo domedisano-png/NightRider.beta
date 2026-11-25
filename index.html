@@ -94,6 +94,14 @@
     <button type="button" class="round" id="recenterBtn" data-i18n-aria="recenter" aria-label="Torna alla mia posizione" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
   </div>
   <div class="bottom">
+    <section class="panel repcard" id="repInfo" hidden aria-label="Segnalazione">
+      <div class="repttl"><span id="riTitle"></span><button type="button" class="rx" id="riX" aria-label="Chiudi">✕</button></div>
+      <div class="note" id="riSub"></div>
+      <div class="btnrow">
+        <button type="button" class="btn" id="riStill" data-i18n="repStill">Ancora presente</button>
+        <button type="button" class="btn primary" id="riGone" data-i18n="repGone">Risolto</button>
+      </div>
+    </section>
     <section class="panel repcard" id="repCard" hidden aria-label="Segnalazione">
       <div class="repttl"><span id="repTitle" data-i18n="repTitle">Cosa vuoi segnalare?</span><button type="button" class="rx" id="repX" aria-label="Chiudi">✕</button></div>
       <div class="repgrid">
@@ -240,10 +248,10 @@
           <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><path d="M17 4l10 25-10-5-10 5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span data-i18n="iArrow">Freccia</span>
         </button>
         <button type="button" class="pick" role="radio" data-key="carIcon" data-val="car">
-          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><rect x="9" y="3" width="16" height="28" rx="7"/><rect x="12" y="12" width="10" height="11" rx="3" fill="#07060d" opacity="0.6"/></svg><span data-i18n="iCar">Auto</span>
+          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><path d="M13 3h8c2 0 3.5 1.5 3.8 4l.7 8.5-.5 10c-.2 3-1.8 5.5-4 5.5h-8c-2.200 0-3.800-2.500-4-5.500l-.5-10L9.200 7C9.500 4.500 11 3 13 3z"/><path d="M11.200 11.500h11.600l1 3.500H10.200zM10.800 22h12.400l-.8 4.200H11.600z" fill="#07060d" opacity="0.7"/><rect x="11" y="15.500" width="12" height="6" rx="1.500" fill="#fff" opacity="0.22"/><rect x="5.500" y="9" width="3" height="2.600" rx="1"/><rect x="25.500" y="9" width="3" height="2.600" rx="1"/></svg><span data-i18n="iCar">Auto</span>
         </button>
         <button type="button" class="pick" role="radio" data-key="carIcon" data-val="moto">
-          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><rect x="14" y="3" width="6" height="28" rx="3"/><rect x="6" y="10" width="22" height="4" rx="2"/></svg><span data-i18n="iMoto">Moto</span>
+          <svg viewBox="0 0 34 34" fill="currentColor" aria-hidden="true"><rect x="15.500" y="2" width="3" height="30" rx="1.500"/><rect x="5" y="10" width="24" height="3" rx="1.500"/><rect x="13" y="14" width="8" height="9" rx="3.500" fill="#07060d" opacity="0.75"/><circle cx="17" cy="19" r="3" fill="#fff" opacity="0.9"/><rect x="14.500" y="26" width="5" height="6" rx="1.500" fill="#07060d" opacity="0.7"/></svg><span data-i18n="iMoto">Moto</span>
         </button>
       </div>
       <div class="fl" id="fl-color" data-i18n="colorLbl">Colore</div>

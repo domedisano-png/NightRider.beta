@@ -72,3 +72,10 @@ Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `
 - In navigazione: scheda piccola in alto con tempo, distanza e orario di arrivo; indicazioni brevi e strette; velocità e limite in basso a sinistra senza scheda.
 - Scorciatoie sotto la ricerca (distributore, ristoranti, bar, parcheggi, ricarica, farmacie): mostrano le attività della zona (dati OpenStreetMap via Overpass).
 - Pulsanti +/−/2D-3D a destra più in basso; nuovo pulsante bandierina per le segnalazioni (traffico, incidente, ostacolo, autovelox, polizia). Le segnalazioni restano sul dispositivo per 3 ore e non sono condivise con altri utenti.
+
+## Novità (round 7)
+- Rampe e svincoli ora stanno sotto le strade principali: nell'immissione resta il colore della strada in cui si entra.
+- Le rotonde prendono il colore e lo spessore della strada più importante che vi entra (e non spariscono più).
+- Linee più dritte: semplificazione più forte sui rettilinei, curve solo dove servono.
+- Nuove icone auto (vista dall'alto con parabrezza, specchietti, fari) e moto (con pilota e manubrio).
+- Segnalazioni selezionabili: tocca l'icona sulla mappa per "Ancora presente" o "Risolto"; in guida l'app avvisa a ~450 m e chiede conferma a ~70 m. Restano sul dispositivo (non condivise con altri utenti).

@@ -424,3 +424,7 @@ select { width: 100%; }
 .rb svg { width: 28px; height: 28px; }
 .rb span { color: var(--fg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rb:active { background: color-mix(in srgb, var(--c) 30%, #0a0618); }
+
+#repInfo .btnrow { margin-top: 8px; }
+#repInfo .btn { margin-top: 0; flex: 1; }
+#repInfo .btn.primary { background: var(--ok); border-color: var(--ok); color: #07060d; }
