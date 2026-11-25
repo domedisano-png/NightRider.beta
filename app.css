@@ -428,3 +428,6 @@ select { width: 100%; }
 #repInfo .btnrow { margin-top: 8px; }
 #repInfo .btn { margin-top: 0; flex: 1; }
 #repInfo .btn.primary { background: var(--ok); border-color: var(--ok); color: #07060d; }
+
+/* niente scritte GPS / Mappa */
+.stats .eta { display: none !important; }

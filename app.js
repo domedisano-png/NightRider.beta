@@ -57,7 +57,7 @@
   /* ---------- Preferenze ---------- */
   function detectLang() { var n = String(navigator.language || 'it').slice(0, 2).toLowerCase(); return ['it', 'en', 'es', 'fr', 'de'].indexOf(n) >= 0 ? n : 'en'; }
   var DEFAULTS = {
-    routeType: 'fast', avoidHighway: false, avoidToll: false,
+    routeType: 'fast', avoidHighway: false, avoidToll: false, avoidFerry: false, avoidUnpaved: false, roadRefs: true,
     carIcon: 'arrow', carColor: '#f7e733',
     voice: true, voiceTurn: true, voiceCam: true, voiceName: '', voiceStyle: 'natural', volume: 0.9,
     cams: true, gloss: true, theme: 'fuchsia', tilt: 0.6, view2d: false,
@@ -611,7 +611,9 @@
       var tot = cum[cum.length - 1]; if (tot < 24) continue;
       var atLen = function (L) { var m = 1; while (m < cum.length - 1 && cum[m] < L) m++; var f = (L - cum[m - 1]) / Math.max(1e-6, cum[m] - cum[m - 1]); return { x: nxy[m - 1].x + (nxy[m].x - nxy[m - 1].x) * f, y: nxy[m - 1].y + (nxy[m].y - nxy[m - 1].y) * f }; };
       var half = Math.min(tot / 4, 30), pm = atLen(tot / 2), pa = atLen(tot / 2 - half), pb = atLen(tot / 2 + half), dl = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
-      labels.push({ nm: nnm, x: pm.x, y: pm.y, ax: pa.x, ay: pa.y, bx: pb.x, by: pb.y, L: tot, k: nkind });
+      var nref = String(np.ref || '').split(';')[0].replace(/\s+/g, ' ').trim(), rps = [];
+      if (nref && nref.length <= 6 && nkind >= 2) { var nrp = Math.max(1, Math.round(tot / 650)); for (var rq = 0; rq < nrp; rq++) rps.push(atLen((rq + 0.5) * tot / nrp)); }
+      labels.push({ nm: nnm, x: pm.x, y: pm.y, ax: pa.x, ay: pa.y, bx: pb.x, by: pb.y, L: tot, k: nkind, ref: nref.length <= 6 ? nref : '', rps: rps });
     }
     if (PO) for (i = 0; i < PO.feats.length; i++) {
       var pf = PO.feats[i]; if (pf.type !== 1) continue;
@@ -971,7 +973,7 @@
     via = via || [];
     var pts = [from].concat(via, [to]);
     function coordStr(arr) { return arr.map(function (q) { return q.lon.toFixed(6) + ',' + q.lat.toFixed(6); }).join(';'); }
-    var ex = []; if (prefs.avoidHighway) ex.push('motorway'); if (prefs.avoidToll) ex.push('toll');
+    var ex = []; if (prefs.avoidHighway) ex.push('motorway'); if (prefs.avoidToll) ex.push('toll'); if (prefs.avoidFerry) ex.push('ferry');
     function one(srv, cs, extra) {
       var url = srv + '/route/v1/driving/' + cs + '?overview=full&geometries=geojson&steps=true&alternatives=' + (cs.split(';').length > 2 ? 'false' : '3') + extra;
       return fetchJson(url, null, 14000).then(function (j) {
@@ -1002,7 +1004,7 @@
       if (ex.length && !e.fatal) return attempt('').then(function (j) { return { data: j, dropped: true }; });
       throw e;
     });
-    var nohwP = ex.indexOf('motorway') >= 0 ? Promise.resolve(null) : attempt('&exclude=motorway').then(function (j) {
+    var nohwP = ex.indexOf('motorway') >= 0 ? Promise.resolve(null) : attempt('&exclude=motorway' + (prefs.avoidFerry ? ',ferry' : '')).then(function (j) {
       j.routes.forEach(function (r) { r._nohw = true; }); return j.routes;
     }, function () { return null; });
     var ttP = prefs.ttKey ? tomtomRoutes(from, to, via).catch(function () { return null; }) : Promise.resolve(null);
@@ -1021,12 +1023,48 @@
       [1, -1].forEach(function (sd) {
         var vp = { lon: g[m][0] + (-dym / nl) * off * sd / cl, lat: g[m][1] + (dxm / nl) * off * sd };
         var arr = [from, vp].concat(via, [to]);
-        tasks.push(all(coordStr(arr), '').then(function (j) { j.routes.forEach(function (r) { r._via = true; }); return j.routes; }, function () { return []; }));
+        tasks.push(all(coordStr(arr), prefs.avoidFerry ? '&exclude=ferry' : '').then(function (j) { j.routes.forEach(function (r) { r._via = true; }); return j.routes; }, function () { return []; }));
       });
       return Promise.all(tasks).then(function (extra) {
         extra.forEach(function (rs) { res.data.routes = res.data.routes.concat(rs); });
         return res;
       });
+    }).then(postFilter);
+  }
+  /* traghetti e strade non asfaltate: si scartano i percorsi che le contengono, se ne esiste almeno uno senza */
+  function hasFerry(r) {
+    var f = false;
+    (r.legs || []).forEach(function (l) { (l.steps || []).forEach(function (st) { if (st.mode === 'ferry' || (st.maneuver && /ferry/.test(st.maneuver.type || ''))) f = true; }); });
+    return f;
+  }
+  function unpavedFlags(routes) {
+    // un'unica richiesta Overpass per percorso: vie non asfaltate (surface) o "track" entro 12 m dalla linea
+    var jobs = routes.map(function (r) {
+      var co = r.geometry.coordinates, n = co.length;
+      if (r.distance > 250000 || n < 2) return Promise.resolve(false);
+      var maxPts = 110, stepI = Math.max(1, Math.floor(n / maxPts)), pts = [], i;
+      for (i = 0; i < n; i += stepI) pts.push(co[i][1].toFixed(5) + ',' + co[i][0].toFixed(5));
+      pts.push(co[n - 1][1].toFixed(5) + ',' + co[n - 1][0].toFixed(5));
+      var ar = 'around:12,' + pts.join(',');
+      var q = '[out:json][timeout:15];(way(' + ar + ')["highway"]["surface"~"^(unpaved|gravel|dirt|ground|earth|sand|grass|mud|compacted|fine_gravel|pebblestone)$"];way(' + ar + ')["highway"="track"];);out ids 1;';
+      return overpass(q, 'strade sterrate').then(function (j) { return !!(j && j.elements && j.elements.length); }, function () { return false; });
+    });
+    return Promise.race([Promise.all(jobs), new Promise(function (res) { setTimeout(function () { res(routes.map(function () { return false; })); }, 9000); })]);
+  }
+  function postFilter(res) {
+    if (!res || !res.data || !res.data.routes) return res;
+    var rs = res.data.routes;
+    if (prefs.avoidFerry && !res.traffic) {
+      var okF = rs.filter(function (r) { return !hasFerry(r); });
+      if (okF.length) res.data.routes = okF; else if (rs.some(hasFerry)) res.ferryLeft = true;
+    }
+    if (!prefs.avoidUnpaved) return res;
+    var cand = distinctRoutes(res.data.routes).slice(0, 5);
+    return unpavedFlags(cand).then(function (fl) {
+      var okU = cand.filter(function (r, i) { return !fl[i]; });
+      if (okU.length && okU.length < cand.length) res.data.routes = okU;
+      else if (!okU.length && fl.some(Boolean)) res.unpavedLeft = true;
+      return res;
     });
   }
   /* TomTom (opzionale, con la chiave gratuita dell'utente): percorsi con traffico, convertiti nel formato OSRM */
@@ -1034,7 +1072,7 @@
   function tomtomRoutes(from, to, via) {
     var wp = [from].concat(via || [], [to]).map(function (q) { return q.lat.toFixed(6) + ',' + q.lon.toFixed(6); }).join(':');
     var url = 'https://api.tomtom.com/routing/1/calculateRoute/' + wp +
-      '/json?key=' + encodeURIComponent(prefs.ttKey) + '&traffic=true&maxAlternatives=2&instructionsType=coded&travelMode=car&routeType=fastest&computeTravelTimeFor=all';
+      '/json?key=' + encodeURIComponent(prefs.ttKey) + '&traffic=true&maxAlternatives=2&instructionsType=coded&travelMode=car&routeType=fastest&computeTravelTimeFor=all' + (prefs.avoidFerry ? '&avoid=ferries' : '') + (prefs.avoidUnpaved ? '&avoid=unpavedRoads' : '');
     var t0 = Date.now();
     return fetchJson(url, null, 12000).then(function (j) {
       logReq('api.tomtom.com', 'traffico', Date.now() - t0, 'ok');
@@ -1238,7 +1276,9 @@
 
   /* ---------- Stato ---------- */
   var state = 'idle';
-  var gps = null, gpsErr = '', here = null, demoPos = false;
+  var gps = null, gpsErr = '', here = null, demoPos = false, gpsSeen = 0;
+  // senza segnale GPS (nessun fix da oltre 8 s, errore o permesso negato) l'icona diventa grigia
+  function gpsLost() { return !sim.active && !demoPos && (!gps || performance.now() - gpsSeen > 8000 || gpsErr === 'denied' || gpsErr === 'na'); }
   var car = { x: 0, y: 0, has: false }, tgt = { x: 0, y: 0 }, phi = -Math.PI / 2, phiT = -Math.PI / 2;
   var speedMs = 0, lastFix = null, lastSave = 0, tgtD = 0, tgtSnap = false, fixT = 0;
   var route = null, prog = { d: 0, idx: 0, dist: 0 }, offSince = 0, lastReroute = 0, rerouting = false;
@@ -1287,6 +1327,7 @@
   function onFix(p) {
     var c = p.coords;
     gps = { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t: p.timestamp };
+    gpsSeen = performance.now();
     gpsErr = '';
     if (sim.active) return;
     if (demoPos) { demoPos = false; ORG = null; car.has = false; resetData(); }
@@ -1332,6 +1373,7 @@
     var list = makeAlts(res.data.routes, dest);
     alts = { list: list, sel: list.length > 1 ? -1 : 0 };
     setRoute(list[0].rt);
+    if (res.ferryLeft) toast(t('ferryLeft'), 6000); else if (res.unpavedLeft) toast(t('unpavedLeft'), 6000);
     $('pvNote').textContent = (res.dropped ? t('dropped') : '') + (list.length < 2 ? t('oneRoute') + ' ' : '') + (res.traffic ? t('withTraffic') : t('noTraffic'));
     showPreview();
     routeCams(route);
@@ -1766,7 +1808,8 @@
       setRow(1, t('lGps'), gpsText);
       setRow(2, t('lMap'), dataStatus());
       setRow(3, '', '');
-      els.gpsLine.textContent = gps || sim.active ? t('gpsFound', gpsText) : demoPos ? t('gpsUsingExample') : gpsErr === 'denied' ? t('gpsDenied') : gpsErr === 'nosupport' ? t('gpsNoSupport') : t('gpsWaitLine');
+      els.gpsLine.textContent = (gps && !gpsLost()) || sim.active ? '' : demoPos ? t('gpsUsingExample') : gpsErr === 'denied' ? t('gpsDenied') : gpsErr === 'nosupport' ? t('gpsNoSupport') : t('gpsWaitLine');
+      els.gpsLine.hidden = !els.gpsLine.textContent;
       $('demoBtn').hidden = !!(gps || demoPos) || !(gpsErr === 'denied' || gpsErr === 'nosupport' || gpsErr === 'na' || performance.now() > 8000);
       cam = camAhead();
     }
@@ -2046,11 +2089,12 @@
   function drawVehicle() {
     var layers = SHAPES[prefs.carIcon] || SHAPES.arrow, k;
     fillPoly(shapePts(layers[0].p, 0), 'rgba(0,0,0,0.55)');
-    ctx.save(); ctx.shadowColor = prefs.carColor; ctx.shadowBlur = 22;
+    var carCol = gpsLost() ? '#8d8aa0' : prefs.carColor;
+    ctx.save(); ctx.shadowColor = carCol; ctx.shadowBlur = gpsLost() ? 8 : 22;
     ctx.beginPath();
-    if (addPoly(shapePts(layers[0].p, layers[0].z))) { ctx.fillStyle = prefs.carColor; ctx.fill(); }
+    if (addPoly(shapePts(layers[0].p, layers[0].z))) { ctx.fillStyle = carCol; ctx.fill(); }
     ctx.restore();
-    for (k = 1; k < layers.length; k++) fillPoly(shapePts(layers[k].p, layers[k].z), layers[k].c === 'car' ? prefs.carColor : layers[k].c);
+    for (k = 1; k < layers.length; k++) fillPoly(shapePts(layers[k].p, layers[k].z), layers[k].c === 'car' ? carCol : layers[k].c);
     ctx.beginPath();
     if (addPoly(shapePts(layers[0].p, layers[0].z))) { ctx.lineWidth = 1.5; ctx.strokeStyle = C.bg; ctx.stroke(); }
   }
@@ -2286,7 +2330,7 @@
     }
     if (route && !d2 && view.free && view.z3 > 1.6) { ctx.globalAlpha = 0.9; drawRoute(); ctx.globalAlpha = 1; }   // da lontano il percorso resta sopra le case
     drawPois();
-    drawRoadNames();
+    drawRoadNames(); drawRoadRefs();
     drawVehicle();
     if (wb > 0) drawWorldOverlay(t, wb);
     drawPins();
@@ -2303,6 +2347,7 @@
       for (k = 0; k < ls.length; k++) {
         var l = ls[k];
         if (l.k < minK || Math.abs(l.x - fc.x) > R2 || Math.abs(l.y - fc.y) > R2) continue;
+        if (prefs.roadRefs && l.ref && l.nm === l.ref) continue;     // il numero si vede già nel cartello
         cands.push(l);
       }
     }
@@ -2326,6 +2371,47 @@
       ctx.lineWidth = 3.4; ctx.strokeStyle = 'rgba(8,4,22,0.92)'; ctx.strokeText(r.nm, 0, 0);
       ctx.fillStyle = r.k >= 5 ? '#ffb3f0' : r.k === 4 ? '#ffd98a' : r.k === 3 ? '#b6f3ff' : '#e4defa'; ctx.fillText(r.nm, 0, 0);
       ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /* Numeri di autostrade e strade principali: cartelli in stile neon (A14, SS16, E45...) */
+  var refDbg = null;
+  var REF_FILL = ['#2a2050', '#2a2050', '#3a2c6e', '#1c4f9c', '#1c4f9c', '#0c6b3d'];
+  function drawRoadRefs() {
+    if (!prefs.roadRefs || cm.Hc > 3200) return;
+    var minK = cm.Hc < 700 ? 2 : 3, cands = [], k, i, c, R2 = cm.R + 40;
+    for (c = 0; c < cellList.length; c++) {
+      var ls = cellList[c].l; if (!ls) continue;
+      for (k = 0; k < ls.length; k++) {
+        var l = ls[k]; if (!l.ref || l.k < minK || !l.rps) continue;
+        for (var rj = 0; rj < l.rps.length; rj++) { var rp = l.rps[rj]; if (Math.abs(rp.x - fc.x) > R2 || Math.abs(rp.y - fc.y) > R2) continue; cands.push({ ref: l.ref, k: l.k, L: l.L, rx: rp.x, ry: rp.y }); }
+      }
+    }
+    refDbg = { c: cands.length, Hc: cm.Hc, minK: minK, s: [] };
+    cands.sort(function (a, b) { return b.k - a.k || b.L - a.L; });
+    ctx.save();
+    ctx.font = '800 12px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    var placed = [], n = 0;
+    for (i = 0; i < cands.length && n < 16; i++) {
+      var r = cands[i], cc = cam3(r.rx, r.ry, 0);
+      if (cc.D < NEAR * 2) continue;
+      var sp = scr(cc);
+      if (sp.x < 24 || sp.x > W - 24 || sp.y < 70 || sp.y > H - 24) continue;
+      var w = Math.max(28, ctx.measureText(r.ref).width + 14), h = 19, hit = false;
+      for (var q = 0; q < placed.length; q++) {
+        var pq = placed[q];
+        if (Math.abs(pq.x - sp.x) < (pq.w + w) / 2 + 4 && Math.abs(pq.y - sp.y) < h + 4) { hit = true; break; }
+        if (pq.ref === r.ref && Math.hypot(pq.x - sp.x, pq.y - sp.y) < 170) { hit = true; break; }
+      }
+      if (hit) continue;
+      placed.push({ x: sp.x, y: sp.y, w: w, ref: r.ref }); n++;
+      var x0 = sp.x - w / 2, y0 = sp.y - h / 2;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x0, y0, w, h, 6); else ctx.rect(x0, y0, w, h);
+      ctx.fillStyle = REF_FILL[r.k] || '#2a2050'; ctx.shadowColor = EDGE[r.k] || '#19e3ff'; ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
+      ctx.lineWidth = 1.8; ctx.strokeStyle = EDGE[r.k] || '#19e3ff'; ctx.stroke();
+      ctx.fillStyle = '#ffffff'; ctx.fillText(r.ref, sp.x, sp.y + 0.5);
     }
     ctx.restore();
   }
@@ -2869,7 +2955,7 @@
     if (me.vis) {
       var ph = ((t / 1000) % 1.6) / 1.6;
       ctx.beginPath(); ctx.arc(me.x, me.y, 7 + ph * 22, 0, 6.2832); ctx.strokeStyle = 'rgba(255,46,136,' + (0.75 * (1 - ph)) + ')'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.beginPath(); ctx.arc(me.x, me.y, 6, 0, 6.2832); ctx.fillStyle = prefs.carColor || C.mag; ctx.shadowColor = prefs.carColor || C.mag; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(me.x, me.y, 6, 0, 6.2832); ctx.fillStyle = gpsLost() ? '#8d8aa0' : prefs.carColor || C.mag; ctx.shadowColor = gpsLost() ? '#8d8aa0' : prefs.carColor || C.mag; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
       ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
     }
     ctx.restore();
@@ -2907,9 +2993,12 @@
     view.free = true; view.fx = fc.x; view.fy = fc.y; view.rot = Math.atan2(cm.fy, cm.fx);
     rcBtn.hidden = false;
   }
+  var ztw = false;      // ritorno morbido alla scala di navigazione
   function recenter() {
-    if (world.on) { exitWorld(true); return; }
+    if (world.on) { exitWorld(true); ztw = true; touch(); return; }
+    var wasFar = worldBlend() > 0.02;
     view.free = false; rcBtn.hidden = true; ensureData();
+    if (wasFar) { ztw = true; touch(); }
   }
   function fitRoute() {
     if (!route || !ORG) return;
@@ -2944,7 +3033,7 @@
   cv.addEventListener('pointerdown', function (e) {
     if (!ORG || !car.has) return;
     try { cv.setPointerCapture(e.pointerId); } catch (x) {}
-    ptrs[e.pointerId] = pos(e); startGesture(); touch();
+    ptrs[e.pointerId] = pos(e); startGesture(); touch(); ztw = false;
     clearTimeout(lpT);
     if (Object.keys(ptrs).length === 1) {
       var q0 = pos(e);
@@ -3018,7 +3107,7 @@
   cv.addEventListener('pointercancel', endPtr);
   cv.addEventListener('wheel', function (e) {
     if (!ORG || !car.has) return;
-    e.preventDefault(); touch();
+    e.preventDefault(); touch(); ztw = false;
     var f = Math.exp(e.deltaY * 0.0015);
     if (world.on) { setZoom(curZoom() * f); return; }
     if (view.free) {
@@ -3028,8 +3117,8 @@
       if (g0 && g1) { view.fx += g0.x - g1.x; view.fy += g0.y - g1.y; }
     } else setZoom(curZoom() * f);
   }, { passive: false });
-  $('zoomIn').addEventListener('click', function () { setZoom(curZoom() / 1.4); touch(); });
-  $('zoomOut').addEventListener('click', function () { setZoom(curZoom() * 1.4); touch(); });
+  $('zoomIn').addEventListener('click', function () { ztw = false; setZoom(curZoom() / 1.4); touch(); });
+  $('zoomOut').addEventListener('click', function () { ztw = false; setZoom(curZoom() * 1.4); touch(); });
   rcBtn.addEventListener('click', recenter);
   modeBtn.addEventListener('click', function () { prefs.view2d = !prefs.view2d; savePrefs(); applyPrefs(); touch(); });
   function syncMode() { modeBtn.textContent = prefs.view2d ? '2D' : '3D'; modeBtn.setAttribute('aria-label', prefs.view2d ? t('to3d') : t('to2d')); }
@@ -3038,6 +3127,12 @@
   var last = performance.now(), hudT = 0, dataT = 0, limT = 0;
   function frame(now) {
     var dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (ztw && !world.on) {
+      var cz = is2D() ? view.z2 : view.z3, nz = cz * Math.pow(1 / cz, 1 - Math.exp(-dt * 2.4));
+      if (Math.abs(Math.log(nz)) < 0.03) { nz = 1; ztw = false; }
+      if (is2D()) view.z2 = nz; else view.z3 = nz;
+      touch();
+    }
     if (car.has) {
       // previsione: tra un fix GPS e l'altro il bersaglio avanza alla velocità attuale, così la mappa scorre senza scatti
       var el = Math.min(1.5, Math.max(0, (now - fixT) / 1000)), px = tgt.x, py = tgt.y;
@@ -3087,6 +3182,9 @@
   }
   window.__nightrider = {
     llScr: function (a, b) { return llScr(a, b); },
+    wb: function () { return { on: world.on, z: world.z, blend: worldBlend(), z2: view.z2, z3: view.z3, free: view.free, near: world.on ? nearOrg() : null, ex: world.on ? exitZnow() : null }; },
+    refDbg: function () { return refDbg; },
+    refs: function () { var a = []; cellList.forEach(function (c) { (c.l || []).forEach(function (l) { if (l.ref) a.push(l.ref + ':' + l.k + ':' + (l.rps || []).length); }); }); return a.slice(0, 12); },
     rings: function () { var n = 0, tot = 0, ks = []; cellList.forEach(function (c) { c.r.forEach(function (r) { tot++; if (r.ring) { n++; ks.push(r.k + '/' + r.w.toFixed(1)); } }); }); return { rings: n, roads: tot, ks: ks }; },
     look: function (lat, lon, z) { var p = toXY(lat, lon); view.free = true; view.fx = p.x; view.fy = p.y; setZoom(z); touch(); },
     cat: function () { return catRes && { cat: catRes.cat, n: catRes.items.length, loading: !!catRes.loading, z2: view.z2, free: view.free, fx: view.fx, fy: view.fy, sp: catRes.items[0] && llScr(catRes.items[0].lat, catRes.items[0].lon) }; },

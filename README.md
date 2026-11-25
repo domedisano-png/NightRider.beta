@@ -82,3 +82,10 @@ Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `
 
 ## Aggiornamento (strade 3D)
 - Strade disegnate con larghezza continua in prospettiva (niente "collo di bottiglia" ai vertici), giunzioni arrotondate, bordo neon piu spesso.
+
+## Novità (round 9)
+- Tolte le scritte GPS / Mappa e "Posizione trovata"; resta solo un avviso se manca il segnale.
+- Icona del mezzo grigia quando il GPS non ha segnale (nessun fix da 8 s).
+- Percorso: opzioni "Evita i traghetti" e "Evita strade non asfaltate" (controllo non asfaltato tramite Overpass, indicativo).
+- Numeri di autostrade e strade principali (A14, SS16…) come cartelli neon; interruttore "Numeri delle strade" in Mappa.
+- Dal pulsante "La mia posizione" in mappa del mondo/globo la vista torna morbidamente alla scala di navigazione.
