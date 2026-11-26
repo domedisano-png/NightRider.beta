@@ -2744,7 +2744,7 @@
   function latOfMy(my) { return Math.atan(Math.sinh(Math.PI * (1 - 2 * my))) * 180 / Math.PI; }
   function wzOfLocal(lat, z2) { return Math.log(156543.03 * Math.cos(lat * Math.PI / 180) / (HC * 6 * z2 / cm.F)) / Math.LN2; }
   function wrapAng(a) { return ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; }
-  function wK() { var k = Math.max(0, Math.min(1, (world.z - (world.zin - 2.5)) / 2.5)); return k * k * (3 - 2 * k); }
+  function wK() { var k = Math.max(0, Math.min(1, (world.z - (exitZnow() - 2.5)) / 2.5)); return k * k * (3 - 2 * k); }
   function wXfWorld() {
     var k = wK();
     WX.mx = world.mx; WX.my = world.my; WX.z = world.z; WX.sx = cm.cx; WX.sy = cm.cy + world.off0 * k; WX.ang = world.ang0 * k + world.rot;
@@ -2758,7 +2758,7 @@
   function exitZnow() { return wzOfLocal(latOfMy(world.my), ZMAX2 * 0.8); }
   function enterWorld() {
     wXfLocal();
-    world.mx = WX.mx; world.my = WX.my; world.z = WX.z; world.zin = WX.z; world.ang0 = wrapAng(WX.ang); world.rot = 0; world.off0 = H * 0.68 - cm.cy;
+    world.mx = WX.mx; world.my = WX.my; world.z = WX.z; world.zin = WX.z; world.ang0 = 0; world.rot = wrapAng(WX.ang); world.off0 = H * 0.68 - cm.cy;
     world.panned = false; world.wasFree = view.free; world.on = true; rcBtn.hidden = false;
   }
   /* mostra un'area (per esempio un percorso lungo) direttamente sulla mappa del mondo */
@@ -2766,7 +2766,7 @@
     var sx = Math.max(1e-6, Math.abs(mxOf(lon2) - mxOf(lon1))), sy = Math.max(1e-6, Math.abs(myOf(lat2) - myOf(lat1)));
     var z = Math.log(Math.min((W - side) * 0.78 / (256 * sx), H * 0.5 / (256 * sy))) / Math.LN2;
     world.mx = (mxOf(lon1) + mxOf(lon2)) / 2; world.my = (myOf(lat1) + myOf(lat2)) / 2;
-    world.z = Math.max(WZMIN, Math.min(WZMAX, z)); world.zin = world.z; world.ang0 = 0; world.rot = 0; world.off0 = 0;
+    world.z = Math.max(WZMIN, Math.min(WZMAX, z)); world.zin = world.z; world.ang0 = 0; world.rot = 0; world.off0 = H * 0.68 - cm.cy;
     world.panned = true; world.wasFree = true; world.on = true; rcBtn.hidden = false;
   }
   function wAng() { return world.ang0 * wK() + world.rot; }
@@ -3179,7 +3179,7 @@
     rcBtn.hidden = false;
   }
   var ztw = false;      // ritorno morbido alla scala di navigazione
-  var compassTw = false, cmpBtn = $('compassBtn'), cmpIc = $('compassIc');
+  var wPreT = 0, compassTw = false, cmpBtn = $('compassBtn'), cmpIc = $('compassIc');
   function northAng() { return world.on ? wAng() : -(Math.atan2(cm.fy, cm.fx) + Math.PI / 2); }
   cmpBtn.addEventListener('click', function () {
     if (!world.on && !view.free) enterFree();
@@ -3345,6 +3345,12 @@
   function frame(now) {
     var dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (compassTw) stepCompass(dt);
+    if (world.on && now - wPreT > 350 && world.z > exitZnow() - 1.8 && world.z >= WZ_GLOBE) {
+      /* in background: prepara i dati della mappa locale nel punto dove si sta ingrandendo */
+      wPreT = now;
+      var pu = worldUnder(cm.cx, H * 0.68);
+      if (pu) { var pla = latOfMy(pu.my), plo = lonOfMx(pu.mx); if (Math.abs(pla - ORG.lat) < 1.2 && Math.abs(plo - ORG.lon) < 1.8) { var pq = toXY(pla, plo); wantAround(pq.x, pq.y, 900); pump(); } }
+    }
     if (now - incT > 120000 && car.has && !document.hidden) { incT = now; fetchIncidents(); }
     syncCompass();
     if (ztw && !world.on) {
