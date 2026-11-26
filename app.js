@@ -113,9 +113,15 @@
 
   /* ---------- Proiezione locale ---------- */
   var ORG = null;
-  function setOrigin(lat, lon) { ORG = { lat: lat, lon: lon, kx: 111320 * Math.cos(lat * Math.PI / 180), ky: 110540 }; }
-  function toXY(lat, lon) { return { x: (lon - ORG.lon) * ORG.kx, y: -(lat - ORG.lat) * ORG.ky }; }
-  function toLL(x, y) { return { lat: ORG.lat - y / ORG.ky, lon: ORG.lon + x / ORG.kx }; }
+  /* proiezione di Mercatore ridotta alla scala del punto d'origine: in metri vicino all'origine e senza deformazioni di forma in qualsiasi punto del mondo */
+  var RE = 6378137;
+  function mercY(lat) { return Math.log(Math.tan(Math.PI / 4 + Math.max(-85, Math.min(85, lat)) * Math.PI / 360)); }
+  function setOrigin(lat, lon) { ORG = { lat: lat, lon: lon, c0: Math.cos(lat * Math.PI / 180), m0: mercY(lat) }; }
+  function toXY(lat, lon) {
+    var dl = ((lon - ORG.lon + 540) % 360 + 360) % 360 - 180;
+    return { x: dl * Math.PI / 180 * RE * ORG.c0, y: -(mercY(lat) - ORG.m0) * RE * ORG.c0 };
+  }
+  function toLL(x, y) { return { lat: (2 * Math.atan(Math.exp(ORG.m0 - y / (RE * ORG.c0))) - Math.PI / 2) * 180 / Math.PI, lon: ORG.lon + x / (RE * ORG.c0) * 180 / Math.PI }; }
   function bearingToPhi(deg) { var r = deg * Math.PI / 180; return Math.atan2(-Math.cos(r), Math.sin(r)); }
 
   /* ---------- Unità ---------- */
@@ -777,8 +783,9 @@
   }
 
   function wantAround(x, y, r) {
-    var ll = toLL(x, y), dLat = r / ORG.ky, dLon = r / ORG.kx, tx, ty, i, j;
-    var a = tileOf(ll.lat + dLat, ll.lon - dLon), b = tileOf(ll.lat - dLat, ll.lon + dLon);
+    var ll = toLL(x, y), nw = toLL(x - r, y - r), se = toLL(x + r, y + r), tx, ty, i, j;
+    var dLat = (nw.lat - se.lat) / 2, dLon = (se.lon - nw.lon) / 2;
+    var a = tileOf(nw.lat, nw.lon), b = tileOf(se.lat, se.lon);
     for (tx = a.x; tx <= b.x; tx++) for (ty = a.y; ty <= b.y; ty++) wantTile(tx, ty);
     var i0 = Math.floor((ll.lon - dLon) / XD_LON), i1 = Math.floor((ll.lon + dLon) / XD_LON);
     var j0 = Math.floor((ll.lat - dLat) / XD_LAT), j1 = Math.floor((ll.lat + dLat) / XD_LAT);
@@ -2742,7 +2749,7 @@
   function myOf(lat) { var r = Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2; }
   function lonOfMx(mx) { return mx * 360 - 180; }
   function latOfMy(my) { return Math.atan(Math.sinh(Math.PI * (1 - 2 * my))) * 180 / Math.PI; }
-  function wzOfLocal(lat, z2) { return Math.log(156543.03 * Math.cos(lat * Math.PI / 180) / (HC * 6 * z2 / cm.F)) / Math.LN2; }
+  function wzOfLocal(lat, z2) { return Math.log(156543.03 * ORG.c0 / (HC * 6 * z2 / cm.F)) / Math.LN2; }
   function wrapAng(a) { return ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; }
   function wK() { var k = Math.max(0, Math.min(1, (world.z - (exitZnow() - 2.5)) / 2.5)); return k * k * (3 - 2 * k); }
   function wXfWorld() {
@@ -2803,16 +2810,6 @@
       world.my = Math.max(0.01, Math.min(0.99, world.my + (pre.my - world.my) * f));
     }
   }
-  /* lontano dal punto d'origine la proiezione locale si deforma: si sposta l'origine sulla zona che si sta guardando */
-  function rebaseNear(lat, lon) {
-    if (!ORG || route || alts.list.length || Math.abs(lat - ORG.lat) < 1.2 && Math.abs(lon - ORG.lon) < 1.8) return;
-    var cl = toLL(car.x, car.y), tl = toLL(tgt.x, tgt.y), fl = lastFix ? toLL(lastFix.x, lastFix.y) : null;
-    setOrigin(lat, lon);
-    var a = toXY(cl.lat, cl.lon); car.x = a.x; car.y = a.y;
-    a = toXY(tl.lat, tl.lon); tgt.x = a.x; tgt.y = a.y;
-    if (fl) { a = toXY(fl.lat, fl.lon); lastFix.x = a.x; lastFix.y = a.y; }
-    resetData();
-  }
   function exitWorld(follow) {
     var k = wK(), wasPanned = world.panned || world.wasFree;
     wXfWorld();
@@ -2820,10 +2817,9 @@
     var fm = WX.mx + (ex * ca + ey * sa) / wp, fy2 = Math.max(0.001, Math.min(0.999, WX.my + (-ex * sa + ey * ca) / wp));
     var lat = latOfMy(fy2), lon = lonOfMx(fm);
     world.on = false;
-    var hc = cm.F * 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, world.z), th = -(world.ang0 * k + world.rot) - Math.PI / 2;
+    var hc = cm.F * 156543.03 * ORG.c0 / Math.pow(2, world.z), th = -(world.ang0 * k + world.rot) - Math.PI / 2;
     if (follow || !wasPanned) { view.free = false; rcBtn.hidden = true; }
     else {
-      rebaseNear(lat, lon);
       var p = toXY(lat, lon);
       view.free = true; view.fx = p.x; view.fy = p.y; view.rot = th; rcBtn.hidden = false;
     }

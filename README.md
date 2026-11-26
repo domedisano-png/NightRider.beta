@@ -96,3 +96,7 @@ Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `
 - **Attività**: nomi di tutte le attività con collisioni gestite; categoria generica per quelle senza icona dedicata.
 - **Tasti rapidi**: Menu → Tasti rapidi, fino a 5 su 11 categorie (nuove: alberghi, officine, negozi, banche, da vedere).
 - **Traffico live**: incidenti, code, lavori e chiusure da TomTom (stessa chiave dei percorsi) e/o HERE (chiave gratuita), uniti senza doppioni, aggiornati ogni 2 minuti; tocca l'icona per i dettagli. Velox OSM: letti anche i tag `enforcement=speed`.
+
+## Giro 11 (v14)
+- Niente più rotazione automatica della mappa del mondo; il passaggio alla mappa di navigazione è continuo.
+- Proiezione di Mercatore ridotta alla scala dell'origine: la mappa locale non si deforma in nessun punto del mondo, quindi si può consultare qualsiasi zona anche con un percorso attivo, senza spostare l'origine. Il caricamento dati in background vale ovunque.
