@@ -3265,7 +3265,10 @@
         compassTw = false;
         if (Math.abs(qang - gest.a0) > 0.05 || gest.rotOn) { gest.rotOn = true; world.rot = wrapAng(gest.wr0 + (qang - gest.a0)); world.panned = true; }
         setZoom(gest.z0 * gest.d0 / qd, qm.x, qm.y);
-        if (!world.on) { gest.w = false; gest.z0 = curZoom(); gest.d0 = qd; gest.g0 = null; }
+        if (!world.on) {
+          /* appena usciti dalla mappa del mondo: la camera locale va aggiornata subito, altrimenti l'ancora verrebbe presa sulla vecchia posizione (la tua) */
+          gest.w = false; gest.z0 = curZoom(); gest.d0 = qd; gest.a0 = qang; gest.r0 = view.rot; setupCamera(); gest.g0 = groundAt(qm.x, qm.y);
+        }
         else { gest.z0 = curZoom(); gest.d0 = qd; }
       }
       return;
@@ -3282,7 +3285,7 @@
     } else if (gest.t === 'pinch' && ids.length >= 2) {
       var a = ptrs[ids[0]], b = ptrs[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       if (!view.free) { setZoom(gest.z0 * gest.d0 / d); if (world.on) { gest.z0 = curZoom(); gest.d0 = d; } return; }
-      if (!gest.g0) gest.g0 = groundAt(mid.x, mid.y);
+      if (!gest.g0) { setupCamera(); gest.g0 = groundAt(mid.x, mid.y); }
       if (gest.r0 === null) gest.r0 = view.rot;
       setZoom(gest.z0 * gest.d0 / d);
       if (world.on) { gest.z0 = curZoom(); gest.d0 = d; return; }
@@ -3324,6 +3327,7 @@
     var f = Math.exp(e.deltaY * 0.0015);
     if (world.on) { var wq = pos(e); setZoom(curZoom() * f, wq.x, wq.y); return; }
     if (view.free) {
+      setupCamera();
       var p = pos(e), g0 = groundAt(p.x, p.y);
       setZoom(curZoom() * f); setupCamera();
       var g1 = groundAt(p.x, p.y);
@@ -3369,7 +3373,7 @@
       var diff = ((phiT - phi + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
       phi += diff * Math.min(1, dt * 4);
     }
-    if ((view.free || world.on) && state === 'nav' && !Object.keys(ptrs).length && Date.now() - view.last > 15000) recenter();
+    if (view.free && !world.on && state === 'nav' && speedMs > 2 && !Object.keys(ptrs).length && Date.now() - view.last > 20000) recenter();   // il ritorno automatico vale solo in marcia e mai dalla mappa del mondo
     var t0 = performance.now();
     draw(now);
     var cost = (performance.now() - t0) / 1000;
@@ -3404,6 +3408,8 @@
   }
   window.__nightrider = {
     llScr: function (a, b) { return llScr(a, b); },
+    gnd: function (x, y) { var g = groundAt(x, y); return g && toLL(g.x, g.y); },
+    vf: function () { return { free: view.free, world: world.on, fx: view.fx, fy: view.fy, ll: view.free ? toLL(view.fx, view.fy) : null }; },
     org: function () { return ORG && { lat: ORG.lat, lon: ORG.lon }; },
     wrot: function (v) { if (v !== undefined) world.rot = v; return { rot: world.rot, ang0: world.ang0, ang: world.on ? wAng() : null, free: view.free }; },
     under: function (x, y) { var u = world.on ? worldUnder(x, y) : null; return u && { lat: latOfMy(u.my), lon: lonOfMx(u.mx) }; },
