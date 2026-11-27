@@ -319,7 +319,7 @@
     for (i = 0; i < xs.length; i++) { if (xs[i] < minx) minx = xs[i]; if (xs[i] > maxx) maxx = xs[i]; if (ys[i] < miny) miny = ys[i]; if (ys[i] > maxy) maxy = ys[i]; }
     var li = 0, ll = 0;
     for (i = 0; i < xs.length - 1; i++) { var sl = Math.hypot(xs[i + 1] - xs[i], ys[i + 1] - ys[i]); if (sl > ll) { ll = sl; li = i; } }
-    return { xs: xs, ys: ys, cls: def[0], k: def[2], lk: /_link$/.test(t.highway), tn: t.brunnel === 'tunnel', br: t.brunnel === 'bridge', ow: t.oneway === 'yes', ring: closed && maxx - minx < 90 && maxy - miny < 90 && maxx - minx > 6, w: def[1] * 1.25, nm: t.name || '', li: li, ll: ll, ms: parseMax(t.maxspeed), minx: minx, maxx: maxx, miny: miny, maxy: maxy };
+    return { xs: xs, ys: ys, cls: def[0], k: def[2], lk: /_link$/.test(t.highway), tn: t.brunnel === 'tunnel', br: t.brunnel === 'bridge', ow: t.oneway === 'yes' ? 1 : t.oneway === '-1' ? -1 : 0, ring: closed && maxx - minx < 90 && maxy - miny < 90 && maxx - minx > 6, w: def[1] * 1.25, nm: t.name || '', li: li, ll: ll, ms: parseMax(t.maxspeed), minx: minx, maxx: maxx, miny: miny, maxy: maxy };
   }
   function addCam(e) {
     var id = 'n' + e.id;
@@ -582,7 +582,7 @@
         var ln = lines[j], g2 = [];
         if (ln.length < 4) continue;
         for (k = 0; k < ln.length; k += 2) g2.push(pt(ln[k], ln[k + 1], R.ext));
-        els.push({ type: 'way', id: synthId++, tags: { highway: hw, name: rp.ref && !rp.name ? rp.ref : rp.name, brunnel: rp.brunnel || '', oneway: rp.oneway ? 'yes' : '' }, geometry: g2 });
+        els.push({ type: 'way', id: synthId++, tags: { highway: hw, name: rp.ref && !rp.name ? rp.ref : rp.name, brunnel: rp.brunnel || '', oneway: rp.oneway === -1 || rp.oneway === '-1' ? '-1' : rp.oneway ? 'yes' : '' }, geometry: g2 });
       }
     }
     // zone del terreno (campagna, parchi, industria, acqua) come poligoni piatti
@@ -2408,6 +2408,42 @@
         if (cl2.length) fillGeom(cl2.length === lst.length ? geo : roadGeom(cl2), 0.12, 0, C.yel, 0.3);
       }
     }
+    // frecce dei sensi unici (non su autostrade e strade a scorrimento veloce), nel colore del bordo della strada
+    if (wk <= 2.2) {
+      ctx.save(); ctx.lineJoin = 'round';
+      for (var al = 0; al < 2; al++) for (var ak = 0; ak <= 3; ak++) {
+        var arl = (al ? visL : vis)[ak];
+        for (var ar = 0; ar < arl.length; ar++) {
+          var rd2 = arl[ar];
+          if (!rd2.ow || rd2.ring || rd2.ll < 4) continue;
+          var step = 55, carry = step * 0.5;
+          for (i = 0; i < rd2.xs.length - 1; i++) {
+            var ax0 = rd2.xs[i], ay0 = rd2.ys[i], ax1 = rd2.xs[i + 1], ay1 = rd2.ys[i + 1], sl2 = Math.hypot(ax1 - ax0, ay1 - ay0);
+            if (sl2 < 0.5) continue;
+            var ux = (ax1 - ax0) / sl2 * rd2.ow, uy = (ay1 - ay0) / sl2 * rd2.ow;
+            for (; carry <= sl2; carry += step) {
+              var px = ax0 + (ax1 - ax0) * carry / sl2, py = ay0 + (ay1 - ay0) * carry / sl2;
+              if (Math.abs(px - fc.x) > cm.R || Math.abs(py - fc.y) > cm.R) continue;
+              var ca = cam3(px, py, 0), cb = cam3(px + ux * 3, py + uy * 3, 0);
+              if (ca.D < NEAR * 3 || cb.D < NEAR * 3) continue;
+              var sa = scr(ca), sb = scr(cb), dx2 = sb.x - sa.x, dy2 = sb.y - sa.y, dl = Math.hypot(dx2, dy2);
+              if (dl < 0.01 || sa.x < 0 || sa.x > W || sa.y < 60 || sa.y > H) continue;
+              dx2 /= dl; dy2 /= dl;
+              var sz = Math.max(4.5, Math.min(11, rd2.w * wk * cm.F / ca.D * 0.55)), nx2 = -dy2, ny2 = dx2;
+              ctx.beginPath();
+              ctx.moveTo(sa.x + dx2 * sz, sa.y + dy2 * sz);
+              ctx.lineTo(sa.x - dx2 * sz * 0.8 + nx2 * sz * 0.85, sa.y - dy2 * sz * 0.8 + ny2 * sz * 0.85);
+              ctx.lineTo(sa.x - dx2 * sz * 0.25, sa.y - dy2 * sz * 0.25);
+              ctx.lineTo(sa.x - dx2 * sz * 0.8 - nx2 * sz * 0.85, sa.y - dy2 * sz * 0.8 - ny2 * sz * 0.85);
+              ctx.closePath();
+              ctx.globalAlpha = 0.95; ctx.fillStyle = EDGE[ak] || '#8b7bd8'; ctx.shadowColor = EDGE[ak] || '#8b7bd8'; ctx.shadowBlur = 4; ctx.fill();
+            }
+            carry -= sl2;
+          }
+        }
+      }
+      ctx.restore();
+    }
     ctx.restore(); ctx.globalAlpha = 1;
 
     // percorso
@@ -2601,9 +2637,16 @@
     }
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    var pks = [];      // parcheggi vicini: se ne mostra uno solo (quello con il nome, o il primo)
     for (i = 0; i < list.length && n < 160; i++) {
       var it = list[i], rr = Math.max(6, Math.min(r, r * 150 / Math.max(60, it.D * 0.6)));
       if (!free(it.x - rr, it.y - rr, it.x + rr, it.y + rr)) continue;
+      if (it.q.c === 'parking') {
+        var near = false;
+        for (k = 0; k < pks.length; k++) if (Math.abs(pks[k].x - it.q.x) < 110 && Math.abs(pks[k].y - it.q.y) < 110 && Math.hypot(pks[k].x - it.q.x, pks[k].y - it.q.y) < 110) { near = true; break; }
+        if (near) continue;
+        pks.push(it.q);
+      }
       var nm = it.q.nm ? (it.q.nm.length > 24 ? it.q.nm.slice(0, 23) + '…' : it.q.nm) : '', lab = null;
       if (showNames && nm) {
         ctx.font = '700 10.5px Nunito, sans-serif';

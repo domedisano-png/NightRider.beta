@@ -103,3 +103,8 @@ Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `
 
 ## Giro 12 (v17)
 - Gallerie e ponti: le gallerie (`brunnel=tunnel`) si disegnano sotto tutte le altre strade, tenui; ponti e viadotti sopra tutto. Correzioni del pizzico dal mondo alla mappa locale.
+
+## Giro 13 (v21)
+- Parcheggi vicini (entro ~110 m) raggruppati: se ne mostra uno solo, preferendo quello con il nome.
+- Frecce dei sensi unici nel colore del bordo della strada; non su autostrade e strade a scorrimento veloce (trunk/motorway) e non sulle rotonde.
+- Ponti come strade normali; linea centrale solo sulle strade a doppio senso.
