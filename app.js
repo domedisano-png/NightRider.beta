@@ -2366,11 +2366,11 @@
       return out;
     }
     var TAU = 6.283185307;
-    function fillGeom(geo, sc, extra, color, alpha) {
+    function fillGeom(geo, sc, extra, color, alpha, flat) {
       ctx.beginPath();
       for (var gi = 0; gi < geo.length; gi++) {
         var g = geo[gi], n = g.x.length, i2;
-        for (i2 = 0; i2 < n; i2++) {
+        for (i2 = flat ? 1 : 0; i2 < (flat ? n - 1 : n); i2++) {      // i ponti hanno estremi dritti: la strada prosegue senza "salsicciotti"
           var rr = Math.max(0.5, (g.w[i2] * sc + extra) / 2);
           ctx.moveTo(g.x[i2] + rr, g.y[i2]); ctx.arc(g.x[i2], g.y[i2], rr, 0, TAU, true);
         }
@@ -2389,20 +2389,20 @@
     // le gallerie stanno SOTTO a tutto (tenui, come ombre); i ponti e i viadotti stanno SOPRA a tutto
     var seq = [[visT, 0, 1], [visT, 1, 1], [visT, 2, 1], [visT, 3, 1], [visT, 4, 1], [visT, 5, 1],
       [vis, 0], [vis, 1], [vis, 2], [visL, 1], [visL, 2], [visL, 3], [visL, 4], [visL, 5], [vis, 3], [vis, 4], [vis, 5],
-      [visB, 0], [visB, 1], [visB, 2], [visB, 3], [visB, 4], [visB, 5]];
+      [visB, 0, 2], [visB, 1, 2], [visB, 2, 2], [visB, 3, 2], [visB, 4, 2], [visB, 5, 2]];
     for (var qi = 0; qi < seq.length; qi++) {
-      var kd = seq[qi][1], lst = seq[qi][0][kd], gh = seq[qi][2] ? 0.3 : 1;
+      var kd = seq[qi][1], lst = seq[qi][0][kd], gh = seq[qi][2] === 1 ? 0.3 : 1, fl = seq[qi][2] === 2;
       if (!lst.length) continue;
       if (kd === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
       var geo = roadGeom(lst);
       if (kd > 0) {
         var ew = kd >= 3 ? 5 : 3.4;                // spessore del bordo in pixel (somma dei due lati)
-        if (kd >= 2 && gh === 1) fillGeom(geo, 1, ew + (kd >= 3 ? 11 : 7), EDGE[kd], kd >= 3 ? 0.15 : 0.1);   // luce intorno
-        if (gh === 1) fillGeom(geo, 1, ew + 2, EDGE[kd], kd >= 3 ? 0.35 : 0.3);                                  // sfumatura del neon
-        fillGeom(geo, 1, ew, EDGE[kd], gh);                                                          // bordo netto
+        if (kd >= 2 && gh === 1 && !fl) fillGeom(geo, 1, ew + (kd >= 3 ? 11 : 7), EDGE[kd], kd >= 3 ? 0.15 : 0.1);   // luce intorno
+        if (gh === 1 && !fl) fillGeom(geo, 1, ew + 2, EDGE[kd], kd >= 3 ? 0.35 : 0.3);                                  // sfumatura del neon
+        fillGeom(geo, 1, ew, EDGE[kd], gh, fl);                                                          // bordo netto
       }
-      fillGeom(geo, 1, 0, colors[kd], gh);
-      if (kd >= 3 && gh === 1) fillGeom(geo, 0.12, 0, C.yel, 0.3);
+      fillGeom(geo, 1, 0, colors[kd], gh, fl);
+      if (kd >= 3 && gh === 1) fillGeom(geo, 0.12, 0, C.yel, 0.3, fl);
     }
     ctx.restore(); ctx.globalAlpha = 1;
 
