@@ -2387,11 +2387,13 @@
     ctx.save();
     // ordine: stradine, provinciali, rampe e svincoli, poi le strade principali: chi si immette cede il colore alla strada in cui entra
     // le gallerie stanno SOTTO a tutto (tenui, come ombre); i ponti e i viadotti stanno SOPRA a tutto
-    var seq = [[visT, 0, 1], [visT, 1, 1], [visT, 2, 1], [visT, 3, 1], [visT, 4, 1], [visT, 5, 1],
-      [vis, 0], [vis, 1], [vis, 2], [visL, 1], [visL, 2], [visL, 3], [visL, 4], [visL, 5], [vis, 3], [vis, 4], [vis, 5],
-      [visB, 0, 2], [visB, 1, 2], [visB, 2, 2], [visB, 3, 2], [visB, 4, 2], [visB, 5, 2]];
+    // strade e rampe dello stesso tipo hanno lo stesso colore: si disegnano insieme (prima tutti i bordi, poi tutti i corpi),
+    // così dove si sovrappongono resta solo il contorno esterno e non compaiono linee colorate incrociate
+    var seq = [[[visT[0]], 0, 1], [[visT[1]], 1, 1], [[visT[2]], 2, 1], [[visT[3]], 3, 1], [[visT[4]], 4, 1], [[visT[5]], 5, 1],
+      [[vis[0]], 0, 0], [[vis[1], visL[1]], 1, 0], [[vis[2], visL[2]], 2, 0], [[vis[3], visL[3]], 3, 0], [[vis[4], visL[4]], 4, 0], [[vis[5], visL[5]], 5, 0],
+      [[visB[0]], 0, 2], [[visB[1]], 1, 2], [[visB[2]], 2, 2], [[visB[3]], 3, 2], [[visB[4]], 4, 2], [[visB[5]], 5, 2]];
     for (var qi = 0; qi < seq.length; qi++) {
-      var kd = seq[qi][1], lst = seq[qi][0][kd], gh = seq[qi][2] === 1 ? 0.3 : 1, fl = seq[qi][2] === 2;
+      var kd = seq[qi][1], lst = seq[qi][0].length > 1 ? seq[qi][0][0].concat(seq[qi][0][1]) : seq[qi][0][0], gh = seq[qi][2] === 1 ? 0.3 : 1, fl = seq[qi][2] === 2;
       if (!lst.length) continue;
       if (kd === 0 && wk > 6) continue;           // da molto lontano le stradine sono solo rumore
       var geo = roadGeom(lst);
