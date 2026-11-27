@@ -319,7 +319,7 @@
     for (i = 0; i < xs.length; i++) { if (xs[i] < minx) minx = xs[i]; if (xs[i] > maxx) maxx = xs[i]; if (ys[i] < miny) miny = ys[i]; if (ys[i] > maxy) maxy = ys[i]; }
     var li = 0, ll = 0;
     for (i = 0; i < xs.length - 1; i++) { var sl = Math.hypot(xs[i + 1] - xs[i], ys[i + 1] - ys[i]); if (sl > ll) { ll = sl; li = i; } }
-    return { xs: xs, ys: ys, cls: def[0], k: def[2], lk: /_link$/.test(t.highway), tn: t.brunnel === 'tunnel', br: t.brunnel === 'bridge', ring: closed && maxx - minx < 90 && maxy - miny < 90 && maxx - minx > 6, w: def[1] * 1.25, nm: t.name || '', li: li, ll: ll, ms: parseMax(t.maxspeed), minx: minx, maxx: maxx, miny: miny, maxy: maxy };
+    return { xs: xs, ys: ys, cls: def[0], k: def[2], lk: /_link$/.test(t.highway), tn: t.brunnel === 'tunnel', br: t.brunnel === 'bridge', ow: t.oneway === 'yes', ring: closed && maxx - minx < 90 && maxy - miny < 90 && maxx - minx > 6, w: def[1] * 1.25, nm: t.name || '', li: li, ll: ll, ms: parseMax(t.maxspeed), minx: minx, maxx: maxx, miny: miny, maxy: maxy };
   }
   function addCam(e) {
     var id = 'n' + e.id;
@@ -582,7 +582,7 @@
         var ln = lines[j], g2 = [];
         if (ln.length < 4) continue;
         for (k = 0; k < ln.length; k += 2) g2.push(pt(ln[k], ln[k + 1], R.ext));
-        els.push({ type: 'way', id: synthId++, tags: { highway: hw, name: rp.ref && !rp.name ? rp.ref : rp.name, brunnel: rp.brunnel || '' }, geometry: g2 });
+        els.push({ type: 'way', id: synthId++, tags: { highway: hw, name: rp.ref && !rp.name ? rp.ref : rp.name, brunnel: rp.brunnel || '', oneway: rp.oneway ? 'yes' : '' }, geometry: g2 });
       }
     }
     // zone del terreno (campagna, parchi, industria, acqua) come poligoni piatti
@@ -2335,7 +2335,7 @@
       for (k = 0; k < rs.length; k++) {
         var rd = rs[k];
         if (rd.maxx < fc.x - V2 || rd.minx > fc.x + V2 || rd.maxy < fc.y - V2 || rd.miny > fc.y + V2) continue;
-        (rd.tn ? visT : rd.br ? visB : rd.lk ? visL : vis)[rd.k].push(rd);
+        (rd.tn ? visT : rd.lk ? visL : vis)[rd.k].push(rd);
       }
     }
     var colors = [ROAD_MINOR, ROAD_MAJOR, ROAD_MAJOR, ROAD_MAJOR, ROAD_MOTORWAY, ROAD_MOTORWAY];
@@ -2390,8 +2390,7 @@
     // strade e rampe dello stesso tipo hanno lo stesso colore: si disegnano insieme (prima tutti i bordi, poi tutti i corpi),
     // così dove si sovrappongono resta solo il contorno esterno e non compaiono linee colorate incrociate
     var seq = [[[visT[0]], 0, 1], [[visT[1]], 1, 1], [[visT[2]], 2, 1], [[visT[3]], 3, 1], [[visT[4]], 4, 1], [[visT[5]], 5, 1],
-      [[vis[0]], 0, 0], [[vis[1], visL[1]], 1, 0], [[vis[2], visL[2]], 2, 0], [[vis[3], visL[3]], 3, 0], [[vis[4], visL[4]], 4, 0], [[vis[5], visL[5]], 5, 0],
-      [[visB[0]], 0, 2], [[visB[1]], 1, 2], [[visB[2]], 2, 2], [[visB[3]], 3, 2], [[visB[4]], 4, 2], [[visB[5]], 5, 2]];
+      [[vis[0]], 0, 0], [[vis[1], visL[1]], 1, 0], [[vis[2], visL[2]], 2, 0], [[vis[3], visL[3]], 3, 0], [[vis[4], visL[4]], 4, 0], [[vis[5], visL[5]], 5, 0]];
     for (var qi = 0; qi < seq.length; qi++) {
       var kd = seq[qi][1], lst = seq[qi][0].length > 1 ? seq[qi][0][0].concat(seq[qi][0][1]) : seq[qi][0][0], gh = seq[qi][2] === 1 ? 0.3 : 1, fl = seq[qi][2] === 2;
       if (!lst.length) continue;
@@ -2404,7 +2403,10 @@
         fillGeom(geo, 1, ew, EDGE[kd], gh, fl);                                                          // bordo netto
       }
       fillGeom(geo, 1, 0, colors[kd], gh, fl);
-      if (kd >= 3 && gh === 1) fillGeom(geo, 0.12, 0, C.yel, 0.3, fl);
+      if (kd >= 3 && gh === 1) {       // linea centrale solo sulle strade a doppio senso (le carreggiate separate non ne hanno una propria)
+        var cl2 = seq[qi][0][0].filter(function (r2) { return !r2.ow; });
+        if (cl2.length) fillGeom(cl2.length === lst.length ? geo : roadGeom(cl2), 0.12, 0, C.yel, 0.3);
+      }
     }
     ctx.restore(); ctx.globalAlpha = 1;
 
