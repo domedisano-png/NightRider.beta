@@ -100,3 +100,6 @@ Dopo ogni modifica cambia il nome della cache in `sw.js` (`nightrider-v5`, poi `
 ## Giro 11 (v14)
 - Niente più rotazione automatica della mappa del mondo; il passaggio alla mappa di navigazione è continuo.
 - Proiezione di Mercatore ridotta alla scala dell'origine: la mappa locale non si deforma in nessun punto del mondo, quindi si può consultare qualsiasi zona anche con un percorso attivo, senza spostare l'origine. Il caricamento dati in background vale ovunque.
+
+## Giro 12 (v17)
+- Gallerie e ponti: le gallerie (`brunnel=tunnel`) si disegnano sotto tutte le altre strade, tenui; ponti e viadotti sopra tutto. Correzioni del pizzico dal mondo alla mappa locale.
